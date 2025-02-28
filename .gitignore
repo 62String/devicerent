@@ -1,13 +1,3 @@
 # Node.js
 node_modules/
 *.log
-.env
-npm-debug.log*
-
-# React
-build/
-.DS_Store
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
