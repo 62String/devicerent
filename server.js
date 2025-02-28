@@ -1,6 +1,8 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 
+app.use(cors()); // 프론트엔드 도메인 허용
 app.use(express.json());
 
 app.get('/api/data', (req, res) => {
@@ -15,8 +17,7 @@ app.get('/api/data', (req, res) => {
 });
 
 app.post('/api/sync', (req, res) => {
-  let syncData = req.body || {}; // 비어 있을 경우 빈 객체로 기본값
-  // 기본값 설정 (필요 시)
+  let syncData = req.body || {};
   syncData = {
     ...syncData,
     id: syncData.id || 1,
@@ -31,4 +32,4 @@ app.post('/api/sync', (req, res) => {
   res.json(syncData);
 });
 
-app.listen(3000, () => console.log('Server running on port 3000'));
+app.listen(4000, () => console.log('Server running on port 4000'));
