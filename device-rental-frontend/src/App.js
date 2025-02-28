@@ -11,7 +11,7 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const response = await axios.get('http://localhost:3000/api/data');
+      const response = await axios.get('http://localhost:4000/api/data');
       setData(response.data);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -20,7 +20,7 @@ function App() {
 
   const syncData = async () => {
     try {
-      const response = await axios.post('http://localhost:3000/api/sync', data);
+      const response = await axios.post('http://localhost:4000/api/sync', data);
       setData(response.data);
       setIsPopupOpen(true);
     } catch (error) {
