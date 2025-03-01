@@ -4,14 +4,35 @@ import axios from 'axios';
 function App() {
   const [data, setData] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [token, setToken] = useState('');
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (isLoggedIn) {
+      fetchData();
+    }
+  }, [isLoggedIn]);
+
+  const login = async () => {
+    try {
+      const response = await axios.post('http://localhost:4000/api/login', { username, password });
+      setToken(response.data.token);
+      setIsLoggedIn(true);
+      setUsername('');
+      setPassword('');
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Invalid credentials');
+    }
+  };
 
   const fetchData = async () => {
     try {
-      const response = await axios.get('http://localhost:4000/api/data');
+      const response = await axios.get('http://localhost:4000/api/data', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setData(response.data);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -20,13 +41,36 @@ function App() {
 
   const syncData = async () => {
     try {
-      const response = await axios.post('http://localhost:4000/api/sync', data);
+      const response = await axios.post('http://localhost:4000/api/sync', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setData(response.data);
       setIsPopupOpen(true);
     } catch (error) {
       console.error('Error syncing data:', error);
     }
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div>
+        <h1>Login</h1>
+        <input
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button onClick={login}>Login</button>
+      </div>
+    );
+  }
 
   return (
     <div>
