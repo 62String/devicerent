@@ -121,8 +121,10 @@ app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
-    const decoded = await verifyToken(token, JWT_SECRET);
-    res.json(devices[0] || { id: 1, deviceInfo: "Device123", category: "Game", osVersion: "1.0", location: "Tokyo" });
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || 'your-secret-key');
+    const user = await User.findOne({ username: decoded.username });
+    if (!user || user.isPending) return res.status(403).json({ message: "Access denied" });
+    res.json({ message: "User data", data: [{ id: 1, name: "Device Data" }] });
   } catch (err) {
     console.error('Token verification error:', err);
     return res.status(403).json({ message: "Invalid token" });
@@ -149,13 +151,10 @@ app.get('/api/devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
-    const decoded = await verifyToken(token, JWT_SECRET);
-    const devices = [
-      { id: 1, deviceInfo: "Device123", status: "Available" },
-      { id: 2, deviceInfo: "Device456", status: "Rented" },
-      { id: 3, deviceInfo: "Device789", status: "Maintenance" }
-    ];
-    res.json(devices);
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || 'your-secret-key');
+    const user = await User.findOne({ username: decoded.username });
+    if (!user || user.isPending) return res.status(403).json({ message: "Access denied" });
+    res.json({ message: "Available devices", devices: [{ id: 1, name: "Laptop", available: true }] });
   } catch (err) {
     console.error('Token verification error:', err);
     return res.status(403).json({ message: "Invalid token" });
