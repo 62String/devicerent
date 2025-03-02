@@ -5,21 +5,20 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const app = express();
-const { User } = require('./init.js');
+const User = require('./models/User');
 
-app.use(cors()); // 프론트엔드 도메인 허용
+app.use(cors({
+  origin: 'http://localhost:3000' // 프론트엔드 도메인 (예: React)
+}));
 app.use(express.json());
 
 // MongoDB 연결 (로컬)
-mongoose.connect('mongodb://localhost:27017/devicerent', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+mongoose.connect('mongodb://localhost:27017/devicerent')
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
 // 엑셀 파일 경로
-const excelFile = 'device-data.xlsx';
+const excelFile = process.env.EXCEL_FILE_PATH || './device-data.xlsx';
 
 // 엑셀 데이터 로드
 let devices = [];
@@ -117,6 +116,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// 일반 사용자 데이터 조회 엔드포인트: 승인된 사용자만 접근 가능
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
@@ -131,22 +131,30 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
-app.post('/api/sync', (req, res) => {
-  let syncData = req.body || {};
-  syncData = {
-    ...syncData,
-    id: syncData.id || 1,
-    deviceInfo: syncData.deviceInfo || "Device123",
-    category: syncData.category || "Game",
-    osVersion: syncData.osVersion || "1.0",
-    location: syncData.location || "Tokyo"
-  };
-  delete syncData.category;
-  delete syncData.osVersion;
-  delete syncData.location;
-  res.json(syncData);
+app.post('/api/sync', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: "No token provided" });
+  try {
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || 'your-secret-key');
+    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+      return res.status(403).json({ message: "Admin access required" });
+    let syncData = req.body || {};
+    syncData = {
+      ...syncData,
+      id: syncData.id || 1,
+      deviceInfo: syncData.deviceInfo || "Device123"
+    };
+    delete syncData.category;
+    delete syncData.osVersion;
+    delete syncData.location;
+    res.json(syncData);
+  } catch (err) {
+    console.error('Sync error:', err);
+    return res.status(403).json({ message: "Invalid token" });
+  }
 });
 
+// 디바이스 조회 엔드포인트: 승인된 사용자만 접근 가능
 app.get('/api/devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
@@ -223,4 +231,27 @@ app.post('/api/device-rental-reject', async (req, res) => {
   }
 });
 
-app.listen(4000, () => console.log('Server running on port 4000'));
+// 수정 /api/users (인증된 전체 사용자, isAdmin 구분)
+app.get('/api/users', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: "No token provided" });
+  try {
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || 'your-secret-key');
+    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+      return res.status(403).json({ message: "Admin access required" });
+    const users = await User.find({ isPending: false });
+    res.json(users.map(user => ({
+      username: user.username,
+      name: user.name,
+      affiliation: user.affiliation,
+      isAdmin: user.isAdmin // 일반/관리자 구분
+    })));
+  } catch (err) {
+    console.error('Token verification error:', err);
+    return res.status(403).json({ message: "Invalid token" });
+  }
+});
+
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
