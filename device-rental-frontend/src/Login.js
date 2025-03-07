@@ -3,30 +3,33 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 function Login() {
-  const [username, setUsername] = useState('');
+  const [id, setId] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
     try {
-      const response = await axios.post('http://localhost:4000/api/login', { username, password });
+      const response = await axios.post('http://localhost:4000/api/login', { id, password });
       localStorage.setItem('token', response.data.token);
       navigate('/devices');
     } catch (error) {
-      alert(error.response?.data?.message || 'Login failed');
+      setError(error.response?.data?.message || 'Login failed');
     }
   };
 
   return (
     <div style={{ maxWidth: '400px', margin: '0 auto', padding: '20px' }}>
       <h2>Login</h2>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
       <form onSubmit={handleLogin}>
         <input
           type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          placeholder="ID"
+          value={id}
+          onChange={(e) => setId(e.target.value)}
           required
           style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
         />

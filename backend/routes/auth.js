@@ -40,11 +40,14 @@ router.post('/login', async (req, res) => {
     console.log('Login attempt:', { id, password });
     const user = await User.findOne({ id });
     console.log('User found:', user);
-    if (!user || !(await user.comparePassword(password))) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
     if (user.isPending) {
       return res.status(403).json({ message: "Account pending admin approval" });
+    }
+    if (!(await user.comparePassword(password))) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
     const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
     res.json({ token });
