@@ -21,24 +21,32 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const existingUser = await User.findOne({ id });
+    const existingUser = await User.findOne({ id: id.trim() });
     if (existingUser) return res.status(400).json({ message: "ID already exists" });
 
-    const user = new User({ name, affiliation, id, password, isPending: true, isAdmin: false });
+    const user = new User({
+      name,
+      affiliation,
+      id: id.trim(),
+      username: id.trim(), // id를 username으로 사용 (선택)
+      password,
+      isPending: true,
+      isAdmin: false
+    });
     await user.save();
 
-    res.json({ message: "Registration successful, pending admin approval", user: { id, name, affiliation } });
+    res.json({ message: "Registration successful, pending admin approval", user: { id: id.trim(), name, affiliation } });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
 router.post('/login', async (req, res) => {
   const { id, password } = req.body;
   try {
-    console.log('Login attempt:', { id, password });
-    const user = await User.findOne({ id });
+    console.log('Login attempt:', { id: id.trim(), password });
+    const user = await User.findOne({ id: id.trim() });
     console.log('User found:', user);
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -50,10 +58,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
     const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
+    console.log('Token generated:', token); // 디버깅
     res.json({ token });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: "Server error" });
+    console.error('Login error:', error.stack); // 스택 트레이스
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 

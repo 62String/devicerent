@@ -7,7 +7,13 @@ const DeviceSchema = new Schema({
   category: { type: String, required: true },        // 카테고리
   osVersion: { type: String },                       // OS 버전
   location: { type: String },                        // 위치
-  rentedBy: { type: String, default: null },         // 대여자 (id 참조)
+  rentedBy: { 
+    type: {
+      name: { type: String, required: true },        // 대여자 이름
+      affiliation: { type: String, required: true }
+    },
+    default: null
+  },
   rentedAt: { type: Date, default: null }            // 대여 시간
 });
 

@@ -14,9 +14,11 @@ function Login() {
     try {
       const response = await axios.post('http://localhost:4000/api/login', { id, password });
       localStorage.setItem('token', response.data.token);
+      console.log('Token saved:', response.data.token); // 디버깅 로그 추가
       navigate('/devices');
     } catch (error) {
       setError(error.response?.data?.message || 'Login failed');
+      console.error('Login error:', error) // 에러 로그그
     }
   };
 
@@ -29,7 +31,7 @@ function Login() {
           type="text"
           placeholder="ID"
           value={id}
-          onChange={(e) => setId(e.target.value)}
+          onChange={(e) => setId(e.target.value.trim())} //trim 적용
           required
           style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
         />
@@ -46,7 +48,7 @@ function Login() {
         </button>
       </form>
       <p>
-        Don't have an account? <a href="/register">Register here</a>
+        계정이 없나요? <a href="/register">Register here</a>
       </p>
     </div>
   );

@@ -3,9 +3,9 @@ const bcrypt = require('bcrypt');
 const Schema = mongoose.Schema;
 
 const UserSchema = new Schema({
-  name: { type: String, required: true },        // 이름
-  affiliation: { type: String, required: true }, // 소속
-  id: { type: String, required: true, unique: true }, // 고유 식별자 (원래 username)
+  name: { type: String, required: true },
+  affiliation: { type: String, required: true },
+  id: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   isPending: { type: Boolean, default: true },
   isAdmin: { type: Boolean, default: false }

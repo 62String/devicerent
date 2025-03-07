@@ -1,13 +1,11 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-const verifyToken = (token) => {
-  return new Promise((resolve, reject) => {
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-      if (err) reject(err);
-      else resolve(decoded);
-    });
-  });
+const verifyToken = async (token, secret) => {
+  try {
+    return jwt.verify(token, secret);
+  } catch (error) {
+    throw new Error('Invalid token');
+  }
 };
 
 module.exports = { verifyToken };
