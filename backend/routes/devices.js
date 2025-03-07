@@ -63,19 +63,35 @@ router.post('/rent-device', async (req, res) => {
 
 router.post('/return-device', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
+  console.log('Return token received:', token);
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId } = req.body;
-    const device = await Device.findOne({ id: deviceId });
+    console.log('Device ID received:', deviceId, typeof deviceId);
+    const device = await Device.findOne({ id: Number(deviceId) });
+    console.log('Device found:', device);
     if (!device) return res.status(404).json({ message: "Device not found" });
-    if (!device.rentedBy || device.rentedBy !== decoded.id) return res.status(400).json({ message: "Cannot return this device" });
+    if (!device.rentedBy) return res.status(400).json({ message: "Device is not rented" });
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    console.log('Current user:', user.name, 'Rented by:', device.rentedBy.name); // 디버깅
+
+    if (device.rentedBy.name !== user.name) {
+      return res.status(403).json({ message: "Cannot return this device" });
+    }
+
     device.rentedBy = null;
     device.rentedAt = null;
     await device.save();
+    console.log('Device after return:', await Device.findOne({ id: device.id }));
     res.json({ message: "Device returned successfully" });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error('Error returning device:', error.stack);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 

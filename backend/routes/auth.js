@@ -65,5 +65,24 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+//me 엔드포인트
+router.get('/me', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  console.log('Me token received:', token);
+  if (!token) return res.status(401).json({ message: "No token provided" });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    console.log('Returning user data:', user);
+    res.json({ user: user.toObject() }); // Mongoose 객체를 JSON으로 변환
+  } catch (error) {
+    console.error('Error fetching user:', error.stack);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
 
 module.exports = router;
