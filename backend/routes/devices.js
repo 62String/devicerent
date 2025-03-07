@@ -8,17 +8,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 router.get('/devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
-  try {
-    const decoded = await verifyToken(token, JWT_SECRET);
-    const user = await User.findOne({ username: decoded.username });
-    if (!user || user.isPending) return res.status(403).json({ message: "Access denied" });
 
-    const devices = await Device.find()
-      .select('id deviceInfo category osVersion location rentedBy rentedAt')
-      .populate('rentedBy', 'username');
-    res.json({ message: "All devices", devices });
-  } catch (err) {
-    console.error('Device fetch error:', err);
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const devices = await Device.find(); // MongoDB에서 모든 디바이스 가져오기
+    res.json(devices);
+  } catch (error) {
+    console.error('Error fetching devices:', error);
     res.status(500).json({ message: "Server error" });
   }
 });

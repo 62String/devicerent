@@ -14,7 +14,7 @@ function Devices() {
 
   const fetchDevices = async () => {
     try {
-      const response = await axios.get('http://localhost:4000/devices', {
+      const response = await axios.get('http://localhost:4000/api/devices', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDevices(response.data);
@@ -51,7 +51,7 @@ function Devices() {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(response.data.message);
-      fetchDevices(); // 갱신
+      fetchDevices();
     } catch (error) {
       alert(error.response?.data?.message || 'Rent failed');
     }
@@ -63,7 +63,7 @@ function Devices() {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(response.data.message);
-      fetchDevices(); // 갱신
+      fetchDevices();
     } catch (error) {
       alert(error.response?.data?.message || 'Return failed');
     }
@@ -86,10 +86,10 @@ function Devices() {
             <li key={device.id}>
               {device.deviceInfo} - {device.category}
               {device.rentedBy ? (
-                device.rentedBy._id === currentUser?._id ? (
+                device.rentedBy === currentUser?.id ? (
                   <button onClick={() => handleReturn(device.id)}>[반납]</button>
                 ) : (
-                  <span> [대여중] {device.rentedBy.username}</span>
+                  <span> [대여중] {device.rentedBy}</span>
                 )
               ) : (
                 <button onClick={() => handleRent(device.id)}>[대여]</button>
