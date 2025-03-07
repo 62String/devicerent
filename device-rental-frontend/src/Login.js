@@ -14,7 +14,7 @@ function Login() {
       localStorage.setItem('token', response.data.token);
       navigate('/devices');
     } catch (error) {
-      alert('Invalid credentials');
+      alert(error.response?.data?.message || 'Login failed');
     }
   };
 

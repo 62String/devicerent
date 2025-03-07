@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 function Register() {
   const [formData, setFormData] = useState({
-    name: '',
-    affiliation: '',
-    username: '',
+    id: '', // 고유 식별자
     password: '',
-    passwordConfirm: ''
+    passwordConfirm: '',
+    name: '', // 이름
+    affiliation: '' // 소속
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -17,14 +17,26 @@ function Register() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    console.log('Form Data:', formData);
     try {
-      const response = await axios.post('http://localhost:4000/api/register', formData);
+      const response = await axios.post('http://localhost:4000/api/register', formData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       alert(response.data.message);
       navigate('/login');
     } catch (error) {
+      console.log('Error:', error.response?.data || error.message);
       setError(error.response?.data?.message || 'Registration failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -35,28 +47,10 @@ function Register() {
       <form onSubmit={handleSubmit}>
         <input
           type="text"
-          name="name"
-          value={formData.name}
+          name="id"
+          value={formData.id}
           onChange={handleChange}
-          placeholder="Name"
-          required
-          style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-        />
-        <input
-          type="text"
-          name="affiliation"
-          value={formData.affiliation}
-          onChange={handleChange}
-          placeholder="Affiliation"
-          required
-          style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-        />
-        <input
-          type="text"
-          name="username"
-          value={formData.username}
-          onChange={handleChange}
-          placeholder="Username"
+          placeholder="ID"
           required
           style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
         />
@@ -75,6 +69,24 @@ function Register() {
           value={formData.passwordConfirm}
           onChange={handleChange}
           placeholder="Confirm Password"
+          required
+          style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+        />
+        <input
+          type="text"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          placeholder="Name"
+          required
+          style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+        />
+        <input
+          type="text"
+          name="affiliation"
+          value={formData.affiliation}
+          onChange={handleChange}
+          placeholder="Affiliation"
           required
           style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
         />
