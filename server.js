@@ -159,13 +159,17 @@ app.get('/api/devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = await verifyToken(token, JWT_SECRET);
     const user = await User.findOne({ username: decoded.username });
     if (!user || user.isPending) return res.status(403).json({ message: "Access denied" });
-    res.json({ message: "Available devices", devices: [{ id: 1, name: "Laptop", available: true }] });
+
+    const devices = await Device.find()
+      .select('id deviceInfo category osVersion location rentedBy rentedAt')
+      .populate('rentedBy', 'username'); // 대여자 이름 포함
+    res.json({ message: "All devices", devices });
   } catch (err) {
-    console.error('Token verification error:', err);
-    return res.status(403).json({ message: "Invalid token" });
+    console.error('Device fetch error:', err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
