@@ -4,25 +4,29 @@ const cors = require('cors');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const { verifyToken } = require('./utils/auth'); // 추가
+const { verifyToken } = require('./utils/auth');
 
 const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/devices');
-const adminRoutes = require('./routes/admin');
+const requestsRoutes = require('./routes/admin/requests'); // 수정
+const approveRoutes = require('./routes/admin/approve');   // 수정
+const usersRoutes = require('./routes/admin/users');       // 수정
 const Device = require('./models/Device');
 const User = require('./models/User');
 
+
+
 const app = express();
 
-// 미들웨어
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 라우터 설정 (경로 분리)
 app.use('/api/auth', authRoutes);
 app.use('/api/devices', deviceRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', requestsRoutes); // 수정
+app.use('/api/admin', approveRoutes);  // 수정
+app.use('/api/admin', usersRoutes);    // 수정
 
 const excelFile = process.env.EXCEL_FILE_PATH || './device-data.xlsx';
 const initDevices = async () => {
@@ -44,7 +48,7 @@ const initDevices = async () => {
         } else {
           devices.push({
             id: device.ID,
-            deviceInfo: device.DeviceInfo, // 확인
+            deviceInfo: device.DeviceInfo,
             category: device.Category || 'Uncategorized',
             osVersion: device.OSVersion || '',
             location: device.Location || '',
@@ -75,8 +79,6 @@ mongoose.connect('mongodb://localhost:27017/devicerent')
   })
   .catch(err => console.error('MongoDB connection error:', err));
 
-// 직접 정의된 엔드포인트
-
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
@@ -96,9 +98,7 @@ app.get('/api/me', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    console.log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
-    console.log('User found:', user);
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json({
       user: {
