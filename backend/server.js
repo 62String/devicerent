@@ -18,6 +18,11 @@ const app = express();
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
+// 라우터 설정 (경로 분리)
+app.use('/api/auth', authRoutes);
+app.use('/api/devices', deviceRoutes);
+app.use('/api/admin', adminRoutes);
+
 const excelFile = process.env.EXCEL_FILE_PATH || './device-data.xlsx';
 const initDevices = async () => {
   try {
@@ -69,10 +74,7 @@ mongoose.connect('mongodb://localhost:27017/devicerent')
   })
   .catch(err => console.error('MongoDB connection error:', err));
 
-app.use('/api', authRoutes);
-app.use('/api', deviceRoutes);
-app.use('/api/admin', adminRoutes);
-
+// 직접 정의된 엔드포인트
 
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
