@@ -9,32 +9,45 @@ function AdminPage() {
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'; // 환경 변수 정의
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
   useEffect(() => {
+    if (!token) {
+      navigate('/login', { state: { message: 'No token found' } });
+      return;
+    }
+
     const fetchCurrentUser = async () => {
       try {
-        const response = await axios.get('${apiUrl}/api/me', {
+        const response = await axios.get(`${apiUrl}/api/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const user = response.data.user;
-        setCurrentUser(user);
-        if (!user.isAdmin) {
-          navigate('/devices'); // 관리자가 아니면 디바이스 목록 페이지로 리다이렉트
+        const userData = response.data.user;
+        console.log('AdminPage user data:', userData);
+        if (!userData) {
+          navigate('/login', { state: { message: 'User data not found' } });
+          return;
         }
+        if (!userData.isAdmin) {
+          navigate('/devices', { state: { message: 'Admin access required' } });
+          return;
+        }
+        setCurrentUser(userData);
       } catch (error) {
         console.error('Error fetching current user:', error);
-        navigate('/login'); // 토큰 오류 시 로그인 페이지로 리다이렉트
+        navigate('/login', { state: { message: 'Invalid token or session expired' } });
       }
     };
+
     fetchCurrentUser();
   }, [token, navigate]);
 
   const syncData = async () => {
     try {
-      await axios.post('${apiUrl}/api/sync', {}, {
+      const response = await axios.post(`${apiUrl}/api/sync`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Sync response:', response.data);
       setIsPopupOpen(true);
       setError(null);
     } catch (error) {

@@ -71,12 +71,18 @@ router.get('/me', async (req, res) => {
   console.log('Me token received:', token);
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = await verifyToken(token, JWT_SECRET);
     console.log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
     console.log('User found:', user);
     if (!user) return res.status(404).json({ message: "User not found" });
-    console.log('Returning user data:', user);
+    console.log('Returning user data:', {
+      id: user.id,
+      name: user.name,
+      affiliation: user.affiliation,
+      isPending: user.isPending || false,
+      isAdmin: user.isAdmin || false
+    });
     res.json({
       user: {
         id: user.id,
@@ -88,6 +94,8 @@ router.get('/me', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user:', error.stack);
+    console.log('JWT_SECRET:', JWT_SECRET);
+    console.log('Token error details:', error.name, error.message);
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }

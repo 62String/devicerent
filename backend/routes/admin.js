@@ -9,8 +9,10 @@ router.get('/requests', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
-    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+    console.log('Decoded token in /requests:', decoded);
+    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
       return res.status(403).json({ message: "Admin access required" });
+    }
     const pendingUsers = await User.find({ isPending: true });
     res.json(pendingUsers);
   } catch (err) {
@@ -24,10 +26,12 @@ router.post('/device-rental-approve', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
-    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
       return res.status(403).json({ message: "Admin access required" });
-    const { username, isAdmin = false } = req.body;
-    await User.findOneAndUpdate({ username }, { isPending: false, isAdmin });
+    }
+    const { id, isAdmin = false } = req.body; // username → id
+    const user = await User.findOneAndUpdate({ id }, { isPending: false, isAdmin }, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
     res.json({ message: "Device rental permission approved with admin status" });
   } catch (err) {
     console.error('Token verification error:', err);
@@ -40,10 +44,12 @@ router.post('/device-rental-reject', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
-    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
       return res.status(403).json({ message: "Admin access required" });
-    const { username } = req.body;
-    await User.findOneAndDelete({ username });
+    }
+    const { id } = req.body; // username → id
+    const user = await User.findOneAndDelete({ id });
+    if (!user) return res.status(404).json({ message: "User not found" });
     res.json({ message: "Device rental permission rejected" });
   } catch (err) {
     console.error('Token verification error:', err);
@@ -56,11 +62,12 @@ router.get('/users', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
-    if (!decoded.username || !(await User.findOne({ username: decoded.username, isAdmin: true }))) 
+    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
       return res.status(403).json({ message: "Admin access required" });
+    }
     const users = await User.find({ isPending: false });
     res.json(users.map(user => ({
-      username: user.username,
+      id: user.id, // username → id
       name: user.name,
       affiliation: user.affiliation,
       isAdmin: user.isAdmin

@@ -19,6 +19,7 @@ function Login() {
       console.log('Login response:', response.data);
       localStorage.setItem('token', response.data.token);
       console.log('Token saved:', response.data.token);
+      console.log('Current token in localStorage:', localStorage.getItem('token')); // 추가
       navigate('/devices');
     } catch (error) {
       console.log('Login error details:', error.response?.data || error.message);
