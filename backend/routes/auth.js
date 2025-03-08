@@ -48,14 +48,15 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ id: id.trim() });
     console.log('User found:', user);
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    if (user.isPending) {
-      return res.status(403).json({ message: "Account pending admin approval" });
+      return res.status(401).json({ message: "등록되지 않은 사용자 혹은 아이디가 틀렸습니다." });
     }
     if (!(await user.comparePassword(password))) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "비밀번호가 일치하지 않습니다." });
     }
+    if (user.isPending) {
+      return res.status(403).json({ message: "승인 대기중" });
+    }
+   
     const token = jwt.sign({ id: user.id, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
     console.log('Token generated:', token);
     res.json({ token });
