@@ -46,7 +46,8 @@ function AdminPage() {
       <nav>
         <ul>
           <li><Link to="sync">데이터 동기화</Link></li>
-          {/* 미래 확장: <li><Link to="users">사용자 관리</Link></li> */}
+          <li><Link to="users">사용자 관리</Link></li>
+          <li><Link to="pending">승인대기목록</Link></li> {/* 추가 */}
         </ul>
       </nav>
     </div>

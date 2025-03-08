@@ -9,7 +9,9 @@ const adminAuth = async (req, res, next) => {
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
     console.log('Decoded token:', decoded);
-    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
+    const user = await User.findOne({ id: decoded.id, isAdmin: true });
+    console.log('Found user:', user); // 추가
+    if (!decoded.id || !user) {
       return res.status(403).json({ message: "관리자 권한이 필요합니다." });
     }
     req.user = decoded;
