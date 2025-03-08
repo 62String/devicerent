@@ -13,6 +13,8 @@ function Register() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'; // 환경 변수 정의
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -22,10 +24,14 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
+    if (formData.password !== formData.passwordConfirm) {
+      setError('Passwords do not match');
+      return;
+    }
     setIsSubmitting(true);
     console.log('Form Data:', formData);
     try {
-      const response = await axios.post('http://localhost:4000/api/register', formData, {
+      const response = await axios.post(`${apiUrl}/api/auth/register`, formData, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -33,8 +39,8 @@ function Register() {
       alert(response.data.message);
       navigate('/login');
     } catch (error) {
-      console.log('Error:', error.response?.data || error.message);
-      setError(error.response?.data?.message || 'Registration failed');
+      console.error('Register error:', error.response?.data || error.message);
+      setError(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

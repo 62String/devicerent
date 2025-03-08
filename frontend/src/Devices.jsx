@@ -1,30 +1,39 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode'; // 수정
 
 function Devices() {
   const [devices, setDevices] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState({ name: '', affiliation: '', isAdmin: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  console.log('API URL:', apiUrl);
+
   const fetchDevices = useCallback(async () => {
     setLoading(true);
     setError(null);
+    if (!token) {
+      setError('No token found, please log in again');
+      navigate('/login');
+      return;
+    }
     try {
-      console.log('Fetching devices with token:', token);
-      const response = await axios.get('http://localhost:4000/api/devices', {
+      const response = await axios.get(`${apiUrl}/api/devices`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Fetch response:', response.data);
       setDevices(response.data.devices || response.data);
     } catch (error) {
       console.error('Error fetching devices:', error);
+      console.log('Error response:', error.response?.data);
       setError(error.response?.data?.message || 'Failed to fetch devices');
       if (error.response?.status === 401) {
-        navigate('/login'); // 인증 실패 시 로그인 페이지로 리다이렉트
+        navigate('/login');
       }
     } finally {
       setLoading(false);
@@ -33,13 +42,18 @@ function Devices() {
 
   const fetchCurrentUser = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:4000/api/me', {
+      const response = await axios.get(`${apiUrl}/api/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Fetched user data:', response.data);
-      const userData = response.data.user || response.data; // 중첩 구조 처리
-      setCurrentUser(userData);
-      console.log('Set current user:', userData);
+      const userData = response.data.user || response.data;
+      setCurrentUser(prev => ({
+        ...prev,
+        name: userData.name || '',
+        affiliation: userData.affiliation || '',
+        isAdmin: userData.isAdmin || false,
+        isPending: userData.isPending || false
+      }));
     } catch (error) {
       console.error('Error fetching current user:', error);
       if (error.response?.status === 401) {
@@ -50,9 +64,24 @@ function Devices() {
 
   useEffect(() => {
     if (!token) {
-      navigate('/login'); // 토큰이 없으면 로그인 페이지로 리다이렉트
+      navigate('/login');
       return;
     }
+
+    // 토큰에서 isAdmin 추출
+    let decodedAdmin = false;
+    try {
+      const decoded = jwtDecode(token);
+      console.log('Decoded token:', decoded);
+      decodedAdmin = decoded.isAdmin || false;
+      setCurrentUser(prev => ({
+        ...prev,
+        isAdmin: decodedAdmin
+      }));
+    } catch (error) {
+      console.error('Error decoding token:', error);
+    }
+
     fetchDevices();
     fetchCurrentUser();
   }, [fetchDevices, fetchCurrentUser, token, navigate]);
@@ -60,7 +89,7 @@ function Devices() {
   const handleRent = async (deviceId) => {
     try {
       console.log('Renting device with ID:', deviceId);
-      const response = await axios.post('http://localhost:4000/api/rent-device', { deviceId: Number(deviceId) }, {
+      const response = await axios.post(`${apiUrl}/api/devices/rent-device`, { deviceId: Number(deviceId) }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(response.data.message);
@@ -73,7 +102,7 @@ function Devices() {
   const handleReturn = async (deviceId) => {
     try {
       console.log('Returning device with ID:', deviceId, 'Current User:', currentUser);
-      const response = await axios.post('http://localhost:4000/api/return-device', { deviceId }, {
+      const response = await axios.post(`${apiUrl}/api/devices/return-device`, { deviceId: Number(deviceId) }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(response.data.message);
@@ -87,8 +116,8 @@ function Devices() {
   return (
     <div>
       <h1>Device Rental System</h1>
-      {console.log('Current user in render:', currentUser)}
-      {currentUser && currentUser.isAdmin && (
+      {console.log('Render - currentUser:', currentUser, 'isAdmin:', currentUser.isAdmin)}
+      {currentUser.isAdmin && (
         <button onClick={() => navigate('/admin')}>관리자 페이지</button>
       )}
       <h2>디바이스 목록</h2>

@@ -17,6 +17,7 @@ const app = express();
 // 미들웨어
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // 라우터 설정 (경로 분리)
 app.use('/api/auth', authRoutes);
@@ -95,9 +96,19 @@ app.get('/api/me', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    console.log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
+    console.log('User found:', user);
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ user: { id: user.id, name: user.name, affiliation: user.affiliation } });
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        affiliation: user.affiliation,
+        isPending: user.isPending || false,
+        isAdmin: user.isAdmin || false
+      }
+    });
   } catch (err) {
     console.error('Error fetching user:', err);
     res.status(401).json({ message: "Invalid token" });

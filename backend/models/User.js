@@ -24,4 +24,18 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// toJSON 옵션 추가
+UserSchema.set('toJSON', {
+  transform: function (doc, ret) {
+    ret.id = ret.id;
+    ret.name = ret.name;
+    ret.affiliation = ret.affiliation;
+    ret.isPending = ret.isPending;
+    ret.isAdmin = ret.isAdmin;
+    delete ret.password; // 비밀번호 제거
+    delete ret.__v; // 버전 필드 제거
+    return ret;
+  }
+});
+
 module.exports = mongoose.model('User', UserSchema);

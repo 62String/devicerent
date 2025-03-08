@@ -3,9 +3,10 @@ const router = express.Router();
 const Device = require('../models/Device');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken'); // 추가
+const { verifyToken } = require('../utils/auth');
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 
-router.get('/devices', async (req, res) => {
+router.get('/', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   console.log('Token received:', token);
   if (!token) return res.status(401).json({ message: "No token provided" });

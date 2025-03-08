@@ -28,7 +28,7 @@ router.post('/register', async (req, res) => {
       name,
       affiliation,
       id: id.trim(),
-      username: id.trim(), // id를 username으로 사용 (선택)
+      username: id.trim(),
       password,
       isPending: true,
       isAdmin: false
@@ -57,25 +57,35 @@ router.post('/login', async (req, res) => {
     if (!(await user.comparePassword(password))) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-    const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
-    console.log('Token generated:', token); // 디버깅
+    const token = jwt.sign({ id: user.id, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
+    console.log('Token generated:', token);
     res.json({ token });
   } catch (error) {
-    console.error('Login error:', error.stack); // 스택 트레이스
+    console.error('Login error:', error.stack);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-//me 엔드포인트
+
 router.get('/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   console.log('Me token received:', token);
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
+    console.log('User found:', user);
     if (!user) return res.status(404).json({ message: "User not found" });
     console.log('Returning user data:', user);
-    res.json({ user: user.toObject() }); // Mongoose 객체를 JSON으로 변환
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        affiliation: user.affiliation,
+        isPending: user.isPending || false,
+        isAdmin: user.isAdmin || false
+      }
+    });
   } catch (error) {
     console.error('Error fetching user:', error.stack);
     if (error.name === 'JsonWebTokenError') {

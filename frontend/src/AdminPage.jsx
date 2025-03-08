@@ -9,10 +9,12 @@ function AdminPage() {
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000'; // 환경 변수 정의
+
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
-        const response = await axios.get('http://localhost:4000/api/me', {
+        const response = await axios.get('${apiUrl}/api/me', {
           headers: { Authorization: `Bearer ${token}` }
         });
         const user = response.data.user;
@@ -30,7 +32,7 @@ function AdminPage() {
 
   const syncData = async () => {
     try {
-      await axios.post('http://localhost:4000/api/sync', {}, {
+      await axios.post('${apiUrl}/api/sync', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setIsPopupOpen(true);
