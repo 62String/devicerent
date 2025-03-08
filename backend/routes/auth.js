@@ -28,7 +28,6 @@ router.post('/register', async (req, res) => {
       name,
       affiliation,
       id: id.trim(),
-      username: id.trim(),
       password,
       isPending: true,
       isAdmin: false
