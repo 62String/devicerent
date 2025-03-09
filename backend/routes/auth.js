@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
 
   try {
     const existingUser = await User.findOne({ id: id.trim() });
-    if (existingUser) return res.status(400).json({ message: "ID already exists" });
+    if (existingUser) return res.status(400).json({ message: "이미 존재하는 ID입니다." });
 
     // 파트장 이상 직급에 대해 isAdmin: true 설정
     const isAdmin = ['파트장', '팀장', '실장', '센터장'].includes(position);

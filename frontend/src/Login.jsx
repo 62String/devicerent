@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './utils/AuthContext'; // 경로 조정
 
 function Login() {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { setUser } = useAuth(); // useAuth에서 setUser 가져오기
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
   useEffect(() => {
@@ -32,11 +34,12 @@ function Login() {
 
       // /me 호출로 사용자 정보 가져오기
       const meResponse = await axios.get(`${apiUrl}/api/me`, {
-        headers: { Authorization: `Bearer ${response.data.token}` }
+        headers: { Authorization: `Bearer ${response.data.token}` },
       });
       console.log('User info from /me:', meResponse.data);
-      localStorage.setItem('user', JSON.stringify(meResponse.data.user)); // 사용자 정보 저장
-
+      const userData = meResponse.data.user;
+      localStorage.setItem('user', JSON.stringify(userData)); // 사용자 정보 저장
+      setUser(userData); // AuthContext 상태 업데이트
       console.log('Current token in localStorage:', localStorage.getItem('token'));
       navigate('/devices');
     } catch (error) {

@@ -1,57 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../utils/AuthContext';
 
-function AdminPage() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const token = localStorage.getItem('token');
-  const navigate = useNavigate();
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const AdminPage = () => {
+  const { user } = useAuth();
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/login', { state: { message: 'No token found' } });
-      return;
-    }
-
-    const fetchCurrentUser = async () => {
-      try {
-        const response = await axios.get(`${apiUrl}/api/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const userData = response.data.user;
-        if (!userData) {
-          navigate('/login', { state: { message: 'User data not found' } });
-          return;
-        }
-        if (!userData.isAdmin) {
-          navigate('/devices', { state: { message: 'Admin access required' } });
-          return;
-        }
-        setCurrentUser(userData);
-      } catch (error) {
-        console.error('Error fetching current user:', error);
-        navigate('/login', { state: { message: 'Invalid token or session expired' } });
-      }
-    };
-
-    fetchCurrentUser();
-  }, [token, navigate]);
-
-  if (!currentUser) return <p>Loading...</p>;
+  if (!user || !user.isAdmin) {
+    return <div>관리자 권한이 없습니다.</div>;
+  }
 
   return (
     <div>
-      <h1>Admin Page</h1>
+      <h1>관리자 페이지</h1>
       <nav>
         <ul>
-          <li><Link to="sync">데이터 동기화</Link></li>
-          <li><Link to="users">사용자 관리</Link></li>
-          <li><Link to="pending">승인대기목록</Link></li> {/* 추가 */}
+          <li>
+            <Link to="/admin/sync">데이터 동기화</Link>
+          </li>
+          <li>
+            <Link to="/admin/users">사용자 목록</Link>
+          </li>
+          <li>
+            <Link to="/admin/pending">승인 대기 목록</Link>
+          </li>
+          <li>
+            <Link to="/devices/manage">디바이스 관리</Link>
+          </li>
         </ul>
       </nav>
     </div>
   );
-}
+};
 
 export default AdminPage;

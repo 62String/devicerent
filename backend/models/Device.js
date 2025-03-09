@@ -9,13 +9,13 @@ const DeviceSchema = new Schema({
   modelName: { type: String, default: '' },
   rentedBy: { 
     type: {
-      name: { type: String, required: true },
-      affiliation: { type: String, required: true }
+      name: { type: String },
+      affiliation: { type: String }
     },
     default: null
   },
   rentedAt: { type: Date, default: null },
-  status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' } // 상태 필드 추가
+  status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' }
 });
 
 module.exports = mongoose.model('Device', DeviceSchema);

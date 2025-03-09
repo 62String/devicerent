@@ -5,7 +5,7 @@ const User = require('../models/User');
 const RentalHistory = require('../models/RentalHistory');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../utils/auth');
-const { adminAuth } = require('../middleware'); // adminAuth 추가
+const { adminAuth } = require('./middleware'); // adminAuth 추가
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 
 // 현재 대여 현황
