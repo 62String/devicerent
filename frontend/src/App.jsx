@@ -1,13 +1,19 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import AdminPage from "./admin/pages/AdminPage";
-import SyncPage from "./admin/pages/syncpage";
-import UsersPage from "./admin/pages/UsersPage";
-import PendingUsersPage from "./admin/pages/PendingUsersPage";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import AdminPage from './admin/pages/AdminPage';
+import Devices from './admin/pages/Devices';
+import UsersPage from './admin/pages/UsersPage';
+import PendingUsersPage from './admin/pages/PendingUsersPage';
 import Login from './Login';
 import Register from './Register';
-import Devices from './Devices';
-import { AuthProvider } from './utils/AuthContext';
+import { AuthProvider, useAuth } from './utils/AuthContext';
+
+const ProtectedRoute = ({ element, isAdmin = false }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (isAdmin && !user.isAdmin) return <Navigate to="/devices/status" />;
+  return element;
+};
 
 function App() {
   return (
@@ -18,22 +24,18 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route
             path="/admin"
-            element={<AdminPage />}
-          />
-          <Route
-            path="/admin/sync"
-            element={<SyncPage />}
+            element={<ProtectedRoute element={<AdminPage />} isAdmin={true} />}
           />
           <Route
             path="/admin/users"
-            element={<UsersPage />}
+            element={<ProtectedRoute element={<UsersPage />} isAdmin={true} />}
           />
           <Route
             path="/admin/pending"
-            element={<PendingUsersPage />}
+            element={<ProtectedRoute element={<PendingUsersPage />} isAdmin={true} />}
           />
           <Route
-            path="/devices"
+            path="/devices/*"
             element={<Devices />}
           />
           <Route path="/" element={<Navigate to="/login" />} />

@@ -40,15 +40,15 @@ const initDevices = async () => {
       const devices = [];
       const invalidDevices = [];
       rawDevices.forEach((device, index) => {
-        if (!device.ID || !device.DeviceInfo) {
+        if (!device.SerialNumber || !device.DeviceInfo) {
           invalidDevices.push({ index, device });
         } else {
           devices.push({
-            id: device.ID,
+            serialNumber: device.SerialNumber, // ID → SerialNumber
             deviceInfo: device.DeviceInfo,
-            category: device.Category || 'Uncategorized',
+            osName: device.OSName || 'Unknown', // Category → OSName
             osVersion: device.OSVersion || '',
-            location: device.Location || '',
+            modelName: device.ModelName || '', // 새 필드 추가
             rentedBy: null,
             rentedAt: null
           });
