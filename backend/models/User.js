@@ -7,16 +7,37 @@ const UserSchema = new Schema({
   affiliation: { type: String, required: true },
   id: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  position: { type: String, required: true, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] }, // 5개 직급
+  roleLevel: { type: Number, default: 5 }, // 기본값 5 (최하위 권한)
   isPending: { type: Boolean, default: true },
   isAdmin: { type: Boolean, default: false }
 });
 
 UserSchema.pre('save', async function(next) {
   const user = this;
+
+  // 비밀번호 해싱
   if (user.isModified('password')) {
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(user.password, salt);
   }
+
+  // 직급에 따라 권한 레벨 설정 (역순)
+  if (user.isModified('position')) {
+    if (user.position === '센터장') user.roleLevel = 1; // 나와 센터장님
+    else if (user.position === '실장') user.roleLevel = 2;
+    else if (user.position === '팀장') user.roleLevel = 3;
+    else if (user.position === '파트장') user.roleLevel = 4;
+    else if (user.position === '연구원') user.roleLevel = 5;
+  }
+
+  // 파트장 이상 직급에 대해 isAdmin: true 설정
+  if (['파트장', '팀장', '실장', '센터장'].includes(this.position)) {
+    this.isAdmin = true;
+  } else {
+    this.isAdmin = false;
+  }
+
   next();
 });
 
@@ -30,10 +51,12 @@ UserSchema.set('toJSON', {
     ret.id = ret.id;
     ret.name = ret.name;
     ret.affiliation = ret.affiliation;
+    ret.position = ret.position; // 추가
+    ret.roleLevel = ret.roleLevel; // 추가
     ret.isPending = ret.isPending;
     ret.isAdmin = ret.isAdmin;
-    delete ret.password; // 비밀번호 제거
-    delete ret.__v; // 버전 필드 제거
+    delete ret.password;
+    delete ret.__v;
     return ret;
   }
 });

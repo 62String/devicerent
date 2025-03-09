@@ -9,12 +9,17 @@ const adminAuth = async (req, res, next) => {
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
     console.log('Decoded token:', decoded);
-    const user = await User.findOne({ id: decoded.id, isAdmin: true });
-    console.log('Found user:', user); // 추가
-    if (!decoded.id || !user) {
+    const user = await User.findOne({ id: decoded.id });
+    console.log('Found user from DB:', user); // 더 명확한 로그
+    if (!user || !user.isAdmin) {
       return res.status(403).json({ message: "관리자 권한이 필요합니다." });
     }
-    req.user = decoded;
+    // roleLevel과 사용자 정보 추가
+    req.user = {
+      id: user.id,
+      isAdmin: user.isAdmin,
+      roleLevel: user.roleLevel || 5 // 기본값 5 (최하위)
+    };
     next();
   } catch (err) {
     console.error('Token verification error:', err);

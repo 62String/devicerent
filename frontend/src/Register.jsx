@@ -10,7 +10,8 @@ function Register() {
     password: '',
     passwordConfirm: '',
     name: '',
-    affiliation: ''
+    affiliation: '',
+    position: '연구원' // 기본값 설정
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,12 +32,18 @@ function Register() {
     return allowedChars.test(value.trim()) && value.trim().length >= 2;
   };
 
+  const validatePosition = (value) => {
+    const allowedPositions = ['연구원', '파트장', '팀장'];
+    return allowedPositions.includes(value);
+  };
+
   const validateForm = () => {
     const idValid = validateId(formData.id);
     const passwordMatch = formData.password === formData.passwordConfirm && formData.password.length >= 6;
     const nameValid = validateName(formData.name);
     const affiliationValid = validateAffiliation(formData.affiliation);
-    return idValid && passwordMatch && nameValid && affiliationValid;
+    const positionValid = validatePosition(formData.position);
+    return idValid && passwordMatch && nameValid && affiliationValid && positionValid;
   };
 
   const handleChange = (e) => {
@@ -63,6 +70,9 @@ function Register() {
       } else if (name === 'affiliation') {
         const valid = validateAffiliation(value);
         setError(valid ? '' : value.trim().length < 2 ? '소속은 최소 2자 이상이어야 합니다.' : '소속은 한글, 영어, 숫자, 공백만 사용할 수 있습니다.');
+      } else if (name === 'position') {
+        const valid = validatePosition(value);
+        setError(valid ? '' : '유효하지 않은 직급입니다.');
       }
 
       setIsFormValid(validateForm());
@@ -72,7 +82,7 @@ function Register() {
 
   useEffect(() => {
     setIsFormValid(validateForm());
-  }, [formData.id, formData.password, formData.passwordConfirm, formData.name, formData.affiliation]);
+  }, [formData.id, formData.password, formData.passwordConfirm, formData.name, formData.affiliation, formData.position]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -161,6 +171,20 @@ function Register() {
             required
             style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
           />
+        </div>
+        <div>
+          <label>직급:</label>
+          <select
+            name="position"
+            value={formData.position}
+            onChange={handleChange}
+            required
+            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+          >
+            <option value="연구원">연구원</option>
+            <option value="파트장">파트장</option>
+            <option value="팀장">팀장</option>
+          </select>
         </div>
         <button type="submit" style={{ padding: '10px 20px' }} disabled={!isFormValid || isSubmitting}>
           등록

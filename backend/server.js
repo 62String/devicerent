@@ -8,12 +8,10 @@ const { verifyToken } = require('./utils/auth');
 
 const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/devices');
-const requestsRoutes = require('./routes/admin/requests'); // 수정
 const approveRoutes = require('./routes/admin/approve');   // 수정
 const usersRoutes = require('./routes/admin/users');       // 수정
 const Device = require('./models/Device');
 const User = require('./models/User');
-
 
 
 const app = express();
@@ -24,7 +22,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/devices', deviceRoutes);
-app.use('/api/admin', requestsRoutes); // 수정
 app.use('/api/admin', approveRoutes);  // 수정
 app.use('/api/admin', usersRoutes);    // 수정
 

@@ -21,16 +21,27 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    console.log('apiUrl:', apiUrl);
+    console.log('Sending login request to:', `${apiUrl}/api/auth/login`);
     console.log('Sending login request:', { id, password });
     try {
       const response = await axios.post(`${apiUrl}/api/auth/login`, { id: id.trim(), password });
       console.log('Login response:', response.data);
       localStorage.setItem('token', response.data.token);
       console.log('Token saved:', response.data.token);
+
+      // /me 호출로 사용자 정보 가져오기
+      const meResponse = await axios.get(`${apiUrl}/api/me`, {
+        headers: { Authorization: `Bearer ${response.data.token}` }
+      });
+      console.log('User info from /me:', meResponse.data);
+      localStorage.setItem('user', JSON.stringify(meResponse.data.user)); // 사용자 정보 저장
+
       console.log('Current token in localStorage:', localStorage.getItem('token'));
       navigate('/devices');
     } catch (error) {
       console.log('Login error details:', error.response?.data || error.message);
+      console.log('Login error status:', error.response?.status); // 상태 코드 로그
       setError(error.response?.data?.message || '로그인에 실패했습니다.');
       console.error('Login error:', error);
     }

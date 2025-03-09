@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // 수정
+import { jwtDecode } from 'jwt-decode';
 
 function Devices() {
   const [devices, setDevices] = useState([]);
@@ -45,8 +45,9 @@ function Devices() {
       const response = await axios.get(`${apiUrl}/api/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Fetched user data:', response.data);
+      console.log('Fetched user data from /me:', response.data); // 디버깅 로그
       const userData = response.data.user || response.data;
+      console.log('Setting currentUser with:', userData); // 추가 로그
       setCurrentUser(prev => ({
         ...prev,
         name: userData.name || '',
@@ -68,22 +69,24 @@ function Devices() {
       return;
     }
 
-    // 토큰에서 isAdmin 추출
-    let decodedAdmin = false;
-    try {
-      const decoded = jwtDecode(token);
-      console.log('Decoded token:', decoded);
-      decodedAdmin = decoded.isAdmin || false;
-      setCurrentUser(prev => ({
-        ...prev,
-        isAdmin: decodedAdmin
-      }));
-    } catch (error) {
-      console.error('Error decoding token:', error);
-    }
+    const init = async () => {
+      let decodedAdmin = false;
+      try {
+        const decoded = jwtDecode(token);
+        console.log('Decoded token:', decoded); // 디버깅 로그
+        decodedAdmin = decoded.isAdmin || false;
+        setCurrentUser(prev => ({
+          ...prev,
+          isAdmin: decodedAdmin
+        }));
+      } catch (error) {
+        console.error('Error decoding token:', error);
+      }
 
-    fetchDevices();
-    fetchCurrentUser();
+      await fetchCurrentUser(); // 순차 실행
+      fetchDevices();
+    };
+    init();
   }, [fetchDevices, fetchCurrentUser, token, navigate]);
 
   const handleRent = async (deviceId) => {
@@ -117,9 +120,13 @@ function Devices() {
     <div>
       <h1>Device Rental System</h1>
       {console.log('Render - currentUser:', currentUser, 'isAdmin:', currentUser.isAdmin)}
-      {currentUser.isAdmin && (
-        <button onClick={() => navigate('/admin')}>관리자 페이지</button>
-      )}
+      <div>
+        {currentUser.isAdmin ? (
+          <button onClick={() => navigate('/admin')}>관리자 페이지</button>
+        ) : (
+          <span>관리자 권한이 없습니다.</span>
+        )}
+      </div>
       <h2>디바이스 목록</h2>
       {loading ? (
         <p>디바이스 목록을 불러오는 중...</p>
