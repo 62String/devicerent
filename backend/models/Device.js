@@ -15,7 +15,8 @@ const DeviceSchema = new Schema({
     default: null
   },
   rentedAt: { type: Date, default: null },
-  status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' }
+  status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' },
+  statusReason: { type: String, default: '' } // 상태 사유 필드 추가
 });
 
 module.exports = mongoose.model('Device', DeviceSchema);

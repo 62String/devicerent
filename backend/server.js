@@ -42,6 +42,7 @@ const initDevices = async (force = false) => {
     console.log('Current device count:', count);
     if (count > 0 && !force) {
       console.log('Existing devices found, skipping full initialization. Checking for updates...');
+      return; // 업데이트도 스킵
     }
     const indexes = await mongoose.connection.db.collection('devices').indexes();
     if (indexes.some(index => index.name === 'id_1')) {
@@ -122,13 +123,32 @@ const initDevices = async (force = false) => {
   }
 };
 
+// 디바이스 초기화 API 추가
+app.post('/api/admin/init-devices', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token provided' });
+  try {
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    const user = await User.findOne({ id: decoded.id, isAdmin: true });
+    if (!user) return res.status(403).json({ message: 'Admin access required' });
+
+    const { force } = req.body;
+    await initDevices(force);
+    res.json({ message: 'Device initialization completed', force });
+  } catch (error) {
+    console.error('Device initialization error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 
 mongoose
   .connect('mongodb://localhost:27017/devicerent')
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB connected');
-    return initDevices(); // MongoDB 연결 후 초기화
+    // 초기화는 API 호출로만 실행
+    console.log('Device initialization skipped. Use /api/admin/init-devices to initialize devices.');
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 

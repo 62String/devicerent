@@ -8,6 +8,10 @@ const DeviceManage = () => {
   const [newDevice, setNewDevice] = useState({ serialNumber: '', deviceInfo: '', osName: '', osVersion: '', modelName: '' });
   const [message, setMessage] = useState('');
   const [error, setError] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [newStatus, setNewStatus] = useState('active');
+  const [statusReason, setStatusReason] = useState('');
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -84,9 +88,27 @@ const DeviceManage = () => {
     }
   };
 
-  const handleUpdateStatus = async (serialNumber, status) => {
+  const openStatusModal = (device) => {
+    setSelectedDevice(device);
+    setNewStatus(device.status);
+    setStatusReason(device.statusReason || '');
+    setShowStatusModal(true);
+  };
+
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedDevice(null);
+    setNewStatus('active');
+    setStatusReason('');
+  };
+
+  const handleUpdateStatus = async () => {
     try {
-      const response = await axios.post(`${apiUrl}/api/devices/manage/update-status`, { serialNumber, status }, {
+      const response = await axios.post(`${apiUrl}/api/devices/manage/update-status`, {
+        serialNumber: selectedDevice.serialNumber,
+        status: newStatus,
+        statusReason: statusReason || ''
+      }, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
@@ -99,6 +121,33 @@ const DeviceManage = () => {
       setTimeout(() => setMessage(''), 3000);
       console.error('Error updating device status:', err);
       console.error('Error details:', err.response?.data || err.message || err);
+    } finally {
+      closeStatusModal();
+    }
+  };
+
+  const handleInitDevices = async (force = false) => {
+    try {
+      const response = await axios.post(
+        `${apiUrl}/api/admin/init-devices`,
+        { force },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        }
+      );
+      console.log('DeviceManage handleInitDevices response:', response.data);
+      setMessage('디바이스 초기화 성공');
+      setTimeout(() => setMessage(''), 3000);
+      fetchDevices();
+    } catch (error) {
+      setMessage(error.response?.data?.message || '디바이스 초기화 실패');
+      setTimeout(() => setMessage(''), 3000);
+      console.error('Device initialization error:', error);
+      console.error('Error details:', error.response?.data || error.message || error);
     }
   };
 
@@ -111,6 +160,14 @@ const DeviceManage = () => {
       <h2>디바이스 관리</h2>
       {message && <div style={{ color: message.includes('실패') ? 'red' : 'green', marginBottom: '10px' }}>{message}</div>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
+      <div style={{ marginBottom: '20px' }}>
+        <button onClick={() => handleInitDevices(false)} style={{ marginRight: '10px' }}>
+          엑셀 초기화 (업데이트)
+        </button>
+        <button onClick={() => handleInitDevices(true)}>
+          엑셀 강제 초기화
+        </button>
+      </div>
       <form onSubmit={handleRegister} style={{ marginBottom: '20px' }}>
         <input
           type="text"
@@ -154,7 +211,10 @@ const DeviceManage = () => {
             <tr>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>시리얼 번호</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>모델명</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>상태</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>OS 이름</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>OS 버전</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여자</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여일시</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>액션</th>
             </tr>
           </thead>
@@ -163,29 +223,103 @@ const DeviceManage = () => {
               <tr key={device.serialNumber}>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.serialNumber}</td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.modelName}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.status}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.osName}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.osVersion}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation})` : '없음'}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
+                </td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
                   <button onClick={() => handleDelete(device.serialNumber)}>삭제</button>
-                  {device.status !== 'inactive' && (
-                    <>
-                      <button onClick={() => handleUpdateStatus(device.serialNumber, 'repair')}>
-                        수리중
-                      </button>
-                      <button onClick={() => handleUpdateStatus(device.serialNumber, 'inactive')}>
-                        비활성화
-                      </button>
-                    </>
-                  )}
-                  {device.status === 'repair' && (
-                    <button onClick={() => handleUpdateStatus(device.serialNumber, 'active')}>
-                      활성화
-                    </button>
-                  )}
+                  <button
+                    onClick={() => openStatusModal(device)}
+                    style={{ marginLeft: '10px' }}
+                  >
+                    상태 변경
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* 상태 변경 모달 */}
+      {showStatusModal && (
+        <div style={{
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            width: '400px',
+            textAlign: 'center'
+          }}>
+            <h3>상태 변경</h3>
+            <div style={{ margin: '20px 0' }}>
+              <label style={{ marginRight: '10px' }}>상태: </label>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                style={{ padding: '5px', width: '200px' }}
+              >
+                <option value="active">활성화</option>
+                <option value="repair">수리중</option>
+                <option value="inactive">비활성화</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>사유: </label>
+              <textarea
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                placeholder="상태 변경 사유를 입력하세요"
+                style={{ width: '100%', height: '80px', padding: '5px', resize: 'none' }}
+              />
+            </div>
+            <div>
+              <button
+                onClick={handleUpdateStatus}
+                style={{
+                  marginRight: '10px',
+                  padding: '10px 20px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                확인
+              </button>
+              <button
+                onClick={closeStatusModal}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

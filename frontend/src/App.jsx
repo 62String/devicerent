@@ -5,15 +5,17 @@ import SyncPage from './admin/pages/syncpage';
 import DevicesSubMenu from './admin/pages/Devices';
 import UsersPage from './admin/pages/UsersPage';
 import PendingUsersPage from './admin/pages/PendingUsersPage';
-import DeviceManage from './admin/pages/DeviceManage'; // DeviceManage 임포트 추가
+import DeviceManage from './admin/pages/DeviceManage';
+import DeviceHistory from './admin/pages/DeviceHistory'; // 경로 확인
 import Devices from './Devices';
+import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
 import Register from './Register';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import Navbar from './admin/components/Navbar';
 
 class ErrorBoundary extends Component {
-  state = { hasError: false };
+  state = { hasError: false, error: null, errorInfo: null };
 
   static getDerivedStateFromError(error) {
     return { hasError: true };
@@ -21,11 +23,21 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    this.setState({ error, errorInfo });
   }
 
   render() {
     if (this.state.hasError) {
-      return <h1>문제가 발생했습니다. 다시 시도해 주세요.</h1>;
+      return (
+        <div>
+          <h1>문제가 발생했습니다. 다시 시도해 주세요.</h1>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </details>
+        </div>
+      );
     }
     return this.props.children;
   }
@@ -76,8 +88,8 @@ function App() {
               element={<ProtectedRoute element={<PendingUsersPage />} isAdmin={true} />}
             />
             <Route path="/devices" element={<Devices />} />
-            <Route path="/devices/status" element={<DevicesSubMenu />} />
-            <Route path="/devices/history" element={<DevicesSubMenu />} />
+            <Route path="/devices/status" element={<DeviceStatus />} />
+            <Route path="/devices/history" element={<DeviceHistory />} />
             <Route
               path="/devices/manage"
               element={<ProtectedRoute element={<DeviceManage />} isAdmin={true} />}

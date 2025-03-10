@@ -9,6 +9,12 @@ function Devices() {
   const [searchSerial, setSearchSerial] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showRentModal, setShowRentModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [currentSerialNumber, setCurrentSerialNumber] = useState(null);
+  const [selectedStatus, setSelectedStatus] = useState('active');
+  const [statusReason, setStatusReason] = useState('');
   const { user } = useAuth();
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -30,9 +36,13 @@ function Devices() {
       const response = await axios.get(`${apiUrl}/api/devices`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log('Fetch devices response:', response.data);
-      setDevices(response.data);
-      setFilteredDevices(response.data);
+      console.log('Fetch all devices response:', response.data);
+      setDevices(response.data || []); // null 방지
+      const filtered = (response.data || []).filter(device => 
+        device && (device.status === 'active' && !device.rentedBy || 
+        (device.rentedBy && device.rentedBy.name === user?.name))
+      );
+      setFilteredDevices(filtered);
     } catch (error) {
       console.error('Error fetching devices:', error);
       setError(error.response?.data?.message || 'Failed to fetch devices');
@@ -42,7 +52,7 @@ function Devices() {
     } finally {
       setLoading(false);
     }
-  }, [token, navigate]);
+  }, [token, navigate, user]);
 
   useEffect(() => {
     if (!token || !user) {
@@ -52,41 +62,108 @@ function Devices() {
     fetchDevices();
   }, [fetchDevices, token, user, navigate]);
 
-  const handleRent = async (serialNumber) => {
+  const openRentModal = (serialNumber) => {
+    if (!serialNumber) {
+      console.error('Invalid serialNumber:', serialNumber);
+      alert('유효한 디바이스를 선택해 주세요.');
+      return;
+    }
+    setCurrentSerialNumber(serialNumber);
+    setShowRentModal(true);
+  };
+
+  const closeRentModal = () => {
+    setShowRentModal(false);
+    setCurrentSerialNumber(null);
+  };
+
+  const openReturnModal = (serialNumber) => {
+    if (!serialNumber) {
+      console.error('Invalid serialNumber:', serialNumber);
+      alert('유효한 디바이스를 선택해 주세요.');
+      return;
+    }
+    setCurrentSerialNumber(serialNumber);
+    setShowReturnModal(true);
+  };
+
+  const closeReturnModal = () => {
+    setShowReturnModal(false);
+    setCurrentSerialNumber(null);
+  };
+
+  const openStatusModal = () => {
+    if (!currentSerialNumber) {
+      alert('반납할 디바이스를 선택해 주세요.');
+      return;
+    }
+    setShowReturnModal(false);
+    setShowStatusModal(true);
+  };
+
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedStatus('active');
+    setStatusReason('');
+    setCurrentSerialNumber(null);
+  };
+
+  const handleRent = async () => {
+    if (!currentSerialNumber) {
+      alert('대여할 디바이스를 선택해 주세요.');
+      return;
+    }
     try {
-      console.log('Renting device with serialNumber:', serialNumber);
-      const response = await axios.post(`${apiUrl}/api/devices/rent-device`, { deviceId: serialNumber }, {
+      console.log('Renting device with serialNumber:', currentSerialNumber, 'Token:', token);
+      const response = await axios.post(`${apiUrl}/api/devices/rent-device`, { deviceId: currentSerialNumber }, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log('Rent response:', response.data);
       alert(response.data.message);
       fetchDevices();
     } catch (error) {
+      console.error('Rent error details:', error.response?.data || error.message);
       alert(error.response?.data?.message || 'Rent failed');
-      console.error('Rent error:', error);
+    } finally {
+      closeRentModal();
     }
   };
 
-  const handleReturn = async (serialNumber) => {
+  const handleReturn = async (withStatusChange = false) => {
+    if (!currentSerialNumber) {
+      alert('반납할 디바이스를 선택해 주세요.');
+      return;
+    }
     try {
-      console.log('Returning device with serialNumber:', serialNumber, 'Current User:', user);
-      const response = await axios.post(`${apiUrl}/api/devices/return-device`, { deviceId: serialNumber }, {
+      console.log('Returning device with serialNumber:', currentSerialNumber, 'Current User:', user, 'With status change:', withStatusChange);
+      const payload = withStatusChange ? { deviceId: currentSerialNumber, status: selectedStatus, statusReason } : { deviceId: currentSerialNumber };
+      const response = await axios.post(`${apiUrl}/api/devices/return-device`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      alert(response.data.message);
+      console.log('Return response:', response.data);
+      alert('반납이 성공되었습니다');
       fetchDevices();
     } catch (error) {
+      console.error('Return error details:', error.response?.data || error.message);
       alert(error.response?.data?.message || 'Return failed');
-      console.error('Return error:', error.response?.data);
+    } finally {
+      closeReturnModal();
+      closeStatusModal();
     }
   };
 
   const handleSearch = () => {
     if (!searchSerial.trim()) {
-      setFilteredDevices(devices);
+      setFilteredDevices(devices.filter(device => 
+        device && (device.status === 'active' && !device.rentedBy || 
+        (device.rentedBy && device.rentedBy.name === user?.name))
+      ));
       return;
     }
-    const filtered = devices.filter(device =>
-      device.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
+    const filtered = devices.filter(device => 
+      device && device.serialNumber.toLowerCase().includes(searchSerial.toLowerCase()) &&
+      (device.status === 'active' && !device.rentedBy || 
+       (device.rentedBy && device.rentedBy.name === user?.name))
     );
     setFilteredDevices(filtered);
   };
@@ -94,7 +171,7 @@ function Devices() {
   const showMyDevices = () => {
     if (!user) return;
     const myDevices = devices.filter(device =>
-      device.rentedBy && device.rentedBy.name === user.name
+      device && device.rentedBy && device.rentedBy.name === user.name
     );
     setFilteredDevices(myDevices);
   };
@@ -132,7 +209,16 @@ function Devices() {
           style={{ padding: '5px', marginRight: '10px' }}
         />
         <button onClick={handleSearch}>검색</button>
-        <button onClick={() => { setSearchSerial(''); setFilteredDevices(devices); }} style={{ marginLeft: '10px' }}>
+        <button 
+          onClick={() => { 
+            setSearchSerial(''); 
+            setFilteredDevices(devices.filter(device => 
+              device && (device.status === 'active' && !device.rentedBy || 
+              (device.rentedBy && device.rentedBy.name === user?.name))
+            ));
+          }} 
+          style={{ marginLeft: '10px' }}
+        >
           초기화
         </button>
         <button onClick={showMyDevices} style={{ marginLeft: '10px' }}>
@@ -148,32 +234,36 @@ function Devices() {
           <thead>
             <tr>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>시리얼 번호</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>디바이스 정보</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>모델명</th>
-              <th style={{ border: '1px solid #ddd', padding: '8px' }}>상태</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>OS 이름</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>OS 버전</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여자</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여일시</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>액션</th>
             </tr>
           </thead>
           <tbody>
             {filteredDevices.map(device => (
               <tr key={device.serialNumber}>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.serialNumber}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.deviceInfo}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.modelName}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.status}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.serialNumber || 'N/A'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.modelName || 'N/A'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.osName || 'N/A'}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{device.osVersion || 'N/A'}</td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation})` : '없음'}
+                  {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation || 'N/A'})` : '없음'}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
                   {device.rentedBy ? (
                     user && device.rentedBy.name === user.name ? (
-                      <button onClick={() => handleReturn(device.serialNumber)}>[반납]</button>
+                      <button onClick={() => openReturnModal(device.serialNumber)}>[반납]</button>
                     ) : (
                       <span>대여중</span>
                     )
                   ) : (
-                    <button onClick={() => handleRent(device.serialNumber)}>[대여]</button>
+                    <button onClick={() => openRentModal(device.serialNumber)}>[대여]</button>
                   )}
                 </td>
               </tr>
@@ -182,6 +272,205 @@ function Devices() {
         </table>
       ) : (
         <p>디바이스 목록이 없습니다.</p>
+      )}
+      {/* 대여 확인 모달 */}
+      {showRentModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            width: '400px',
+            textAlign: 'center'
+          }}>
+            <h3>대여 하시겠습니까?</h3>
+            <div style={{ marginTop: '20px' }}>
+              <button
+                onClick={handleRent}
+                style={{
+                  marginRight: '10px',
+                  padding: '10px 20px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                예
+              </button>
+              <button
+                onClick={closeRentModal}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                아니오
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 반납 확인 모달 */}
+      {showReturnModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            width: '400px',
+            textAlign: 'center'
+          }}>
+            <h3>기기를 반납 하시겠습니까?</h3>
+            <div style={{ marginTop: '20px' }}>
+              <button
+                onClick={() => handleReturn(false)}
+                style={{
+                  marginRight: '10px',
+                  padding: '10px 20px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                예
+              </button>
+              <button
+                onClick={closeReturnModal}
+                style={{
+                  marginRight: '10px',
+                  padding: '10px 20px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                아니오
+              </button>
+              <button
+                onClick={openStatusModal}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                상태변경
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 상태 변경 모달 */}
+      {showStatusModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            width: '400px',
+            textAlign: 'center'
+          }}>
+            <h3>기기의 상태를 선택 해 주시고 사유를 입력해주세요</h3>
+            <div style={{ margin: '20px 0' }}>
+              <label style={{ marginRight: '10px' }}>상태: </label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                style={{ padding: '5px', width: '200px' }}
+              >
+                <option value="active">활성화</option>
+                <option value="repair">수리중</option>
+                <option value="inactive">비활성화</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>사유: </label>
+              <textarea
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                placeholder="상태 변경 사유를 입력하세요"
+                style={{ width: '100%', height: '80px', padding: '5px', resize: 'none' }}
+              />
+            </div>
+            <div>
+              <button
+                onClick={() => handleReturn(true)}
+                style={{
+                  marginRight: '10px',
+                  padding: '10px 20px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                확인
+              </button>
+              <button
+                onClick={closeStatusModal}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
