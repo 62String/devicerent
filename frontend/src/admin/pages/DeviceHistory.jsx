@@ -4,7 +4,6 @@ import axios from 'axios';
 const DeviceHistory = () => {
   const [historyPairs, setHistoryPairs] = useState([]);
   const [originalHistoryPairs, setOriginalHistoryPairs] = useState([]);
-  const [devices, setDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
@@ -19,16 +18,10 @@ const DeviceHistory = () => {
 
     const fetchData = async () => {
       try {
-        const devicesResponse = await axios.get(`${apiUrl}/api/devices`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        console.log('Fetched devices:', devicesResponse.data);
-        if (isMounted) setDevices(devicesResponse.data || []);
-
         const historyResponse = await axios.get(`${apiUrl}/api/devices/history`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('Fetched history:', historyResponse.data);
+        console.log('Fetched history data:', historyResponse.data);
         if (isMounted && historyResponse.data && Array.isArray(historyResponse.data)) {
           const sortedHistory = historyResponse.data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           const rentMap = new Map();
@@ -47,12 +40,13 @@ const DeviceHistory = () => {
           const pairs = Array.from(rentMap.values())
             .map(pair => {
               const serial = pair.rent?.serialNumber || pair.return.serialNumber;
-              const device = devices.find(d => d.serialNumber === serial);
+              const deviceInfo = pair.rent?.deviceInfo || pair.return?.deviceInfo || {}; // 안전하게 처리
+              console.log('Processing pair:', { serial, deviceInfo });
               return {
                 serialNumber: serial,
-                modelName: device?.modelName || 'N/A',
-                osName: device?.osName || 'N/A',
-                osVersion: device?.osVersion || 'N/A',
+                modelName: deviceInfo.modelName || 'N/A',
+                osName: deviceInfo.osName || 'N/A',
+                osVersion: deviceInfo.osVersion || 'N/A',
                 rentTime: pair.rent ? new Date(pair.rent.timestamp).toLocaleString() : 'N/A',
                 returnTime: pair.return ? new Date(pair.return.timestamp).toLocaleString() : 'N/A',
                 userId: pair.rent?.userId || pair.return.userId,
@@ -83,7 +77,7 @@ const DeviceHistory = () => {
     return () => {
       isMounted = false;
     };
-  }, [token]); // apiUrl 제거
+  }, [token]);
 
   const handleSearch = () => {
     if (!searchSerial.trim()) {

@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router = express.Router(); // router 객체 정의 추가
 const Device = require('../models/Device');
 const User = require('../models/User');
 const RentalHistory = require('../models/RentalHistory');
@@ -141,8 +141,10 @@ router.post('/rent-device', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId } = req.body;
+    console.log('Rent request for deviceId:', deviceId);
     const device = await Device.findOne({ serialNumber: deviceId });
     if (!device) return res.status(404).json({ message: "Device not found" });
+    console.log('Found device:', device);
     if (device.rentedBy) return res.status(400).json({ message: "Device already rented" });
     if (device.status !== 'active') {
       return res.status(400).json({
@@ -159,18 +161,23 @@ router.post('/rent-device', async (req, res) => {
     device.rentedBy = { name: user.name, affiliation: user.affiliation };
     device.rentedAt = new Date();
     await device.save();
-    const historyResult = await RentalHistory.create({
+    const deviceInfo = {
+      modelName: device.modelName,
+      osName: device.osName,
+      osVersion: device.osVersion
+    };
+    console.log('Device info for rent:', deviceInfo);
+    const historyData = {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
-      deviceInfo: {
-        modelName: device.modelName,
-        osName: device.osName,
-        osVersion: device.osVersion
-      },
+      deviceInfo: deviceInfo,
       timestamp: new Date()
-    });
+    };
+    console.log('History data to save:', historyData);
+    const historyResult = await RentalHistory.create(historyData);
+    console.log('Saved history:', historyResult);
     res.json({ message: "Device rented successfully" });
   } catch (error) {
     console.error('Rent error:', error);
@@ -187,8 +194,10 @@ router.post('/return-device', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId, status = 'active', statusReason = '' } = req.body;
+    console.log('Return request for deviceId:', deviceId);
     const device = await Device.findOne({ serialNumber: deviceId });
     if (!device) return res.status(404).json({ message: "Device not found" });
+    console.log('Found device:', device);
     if (!device.rentedBy) return res.status(400).json({ message: "Device is not rented" });
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -200,18 +209,23 @@ router.post('/return-device', async (req, res) => {
       return res.status(403).json({ message: "Cannot return this device" });
     }
 
-    const historyResult = await RentalHistory.create({
+    const deviceInfo = {
+      modelName: device.modelName,
+      osName: device.osName,
+      osVersion: device.osVersion
+    };
+    console.log('Device info for return:', deviceInfo);
+    const historyData = {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'return',
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
-      deviceInfo: {
-        modelName: device.modelName,
-        osName: device.osName,
-        osVersion: device.osVersion
-      },
+      deviceInfo: deviceInfo,
       timestamp: new Date()
-    });
+    };
+    console.log('History data to save:', historyData);
+    const historyResult = await RentalHistory.create(historyData);
+    console.log('Saved history:', historyResult);
     device.rentedBy = null;
     device.rentedAt = null;
     device.status = status;

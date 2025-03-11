@@ -9,8 +9,13 @@ const RentalHistorySchema = new Schema({
   userDetails: {
     name: { type: String, required: true },
     affiliation: { type: String, required: true }
+  },
+  deviceInfo: {
+    modelName: { type: String, required: true },
+    osName: { type: String, required: true },
+    osVersion: { type: String, required: true }
   }
-});
+}, { strict: true }); // strict 옵션 추가
 
 // 인덱싱 추가
 RentalHistorySchema.index({ serialNumber: 1, timestamp: -1 });
