@@ -152,6 +152,9 @@ router.post('/rent-device', async (req, res) => {
 
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.name || !user.affiliation || user.name.trim() === '' || user.affiliation.trim() === '') {
+      return res.status(400).json({ message: "User name or affiliation is incomplete" });
+    }
 
     device.rentedBy = { name: user.name, affiliation: user.affiliation };
     device.rentedAt = new Date();
@@ -160,17 +163,21 @@ router.post('/rent-device', async (req, res) => {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
-      userDetails: { name: user.name || 'N/A', affiliation: user.affiliation || 'N/A' },
+      userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
+      deviceInfo: {
+        modelName: device.modelName,
+        osName: device.osName,
+        osVersion: device.osVersion
+      },
       timestamp: new Date()
     });
-    console.log('Rental history created:', historyResult);
     res.json({ message: "Device rented successfully" });
   } catch (error) {
     console.error('Rent error:', error);
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -185,6 +192,9 @@ router.post('/return-device', async (req, res) => {
     if (!device.rentedBy) return res.status(400).json({ message: "Device is not rented" });
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.name || !user.affiliation || user.name.trim() === '' || user.affiliation.trim() === '') {
+      return res.status(400).json({ message: "User name or affiliation is incomplete" });
+    }
 
     if (device.rentedBy.name !== user.name) {
       return res.status(403).json({ message: "Cannot return this device" });
@@ -194,10 +204,14 @@ router.post('/return-device', async (req, res) => {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'return',
-      userDetails: { name: user.name || 'N/A', affiliation: user.affiliation || 'N/A' },
+      userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
+      deviceInfo: {
+        modelName: device.modelName,
+        osName: device.osName,
+        osVersion: device.osVersion
+      },
       timestamp: new Date()
     });
-    console.log('Return history created:', historyResult);
     device.rentedBy = null;
     device.rentedAt = null;
     device.status = status;
@@ -209,7 +223,7 @@ router.post('/return-device', async (req, res) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
