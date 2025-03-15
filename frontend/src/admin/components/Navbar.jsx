@@ -26,7 +26,7 @@ function Navbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         {user && (
           <span style={{ color: 'white' }}>
-            환영합니다 {user.affiliation}{user.name}{user.position} 님
+            환영합니다 {user.affiliation} {user.name} {user.position} 님
           </span>
         )}
         {user ? (
