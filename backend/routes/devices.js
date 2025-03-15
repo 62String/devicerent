@@ -140,16 +140,12 @@ router.post('/rent-device', async (req, res) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const { deviceId } = req.body;
-    console.log('Rent request for deviceId:', deviceId);
+    const { deviceId, remark = '' } = req.body;
     const device = await Device.findOne({ serialNumber: deviceId });
     if (!device) return res.status(404).json({ message: "Device not found" });
-    console.log('Found device:', device);
     if (device.rentedBy) return res.status(400).json({ message: "Device already rented" });
     if (device.status !== 'active') {
-      return res.status(400).json({
-        message: `Device is not available (${device.status}${device.statusReason ? `: ${device.statusReason}` : ''})`
-      });
+      return res.status(400).json({ message: `Device is not available (${device.status}${device.statusReason ? `: ${device.statusReason}` : ''})` });
     }
 
     const user = await User.findOne({ id: decoded.id });
@@ -160,27 +156,25 @@ router.post('/rent-device', async (req, res) => {
 
     device.rentedBy = { name: user.name, affiliation: user.affiliation };
     device.rentedAt = new Date();
+    device.remark = remark; // 특이사항 저장
     await device.save();
     const deviceInfo = {
       modelName: device.modelName,
       osName: device.osName,
       osVersion: device.osVersion
     };
-    console.log('Device info for rent:', deviceInfo);
     const historyData = {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
       deviceInfo: deviceInfo,
+      remark: remark,
       timestamp: new Date()
     };
-    console.log('History data to save:', historyData);
-    const historyResult = await RentalHistory.create(historyData);
-    console.log('Saved history:', historyResult);
+    await RentalHistory.create(historyData);
     res.json({ message: "Device rented successfully" });
   } catch (error) {
-    console.error('Rent error:', error);
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }

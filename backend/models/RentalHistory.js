@@ -14,10 +14,10 @@ const RentalHistorySchema = new Schema({
     modelName: { type: String, required: true },
     osName: { type: String, required: true },
     osVersion: { type: String, required: true }
-  }
-}, { strict: true }); // strict 옵션 추가
+  },
+  remark: { type: String, default: '' } // 특이사항 필드 추가
+}, { strict: true });
 
-// 인덱싱 추가
 RentalHistorySchema.index({ serialNumber: 1, timestamp: -1 });
 
 module.exports = mongoose.model('RentalHistory', RentalHistorySchema);

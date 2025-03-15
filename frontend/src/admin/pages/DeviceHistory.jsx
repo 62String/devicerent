@@ -3,14 +3,20 @@ import axios from 'axios';
 
 const DeviceHistory = () => {
   const [historyPairs, setHistoryPairs] = useState([]);
-  const [originalHistoryPairs, setOriginalHistoryPairs] = useState([]);
+  const [originalPairs, setOriginalPairs] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
+  const [showRemarkModal, setShowRemarkModal] = useState(false);
+  const [selectedRemark, setSelectedRemark] = useState('');
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+  console.log('DeviceHistory initialized - token:', token);
+  console.log('DeviceHistory initialized - apiUrl:', apiUrl);
+
   useEffect(() => {
     if (!token) {
+      console.log('No token found, setting error');
       setError('토큰이 없습니다. 로그인 해 주세요.');
       return;
     }
@@ -18,56 +24,84 @@ const DeviceHistory = () => {
 
     const fetchData = async () => {
       try {
+        console.log('Fetching history from:', `${apiUrl}/api/devices/history`);
         const historyResponse = await axios.get(`${apiUrl}/api/devices/history`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Fetched history data:', historyResponse.data);
         if (isMounted && historyResponse.data && Array.isArray(historyResponse.data)) {
           const sortedHistory = historyResponse.data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-          const rentMap = new Map();
+          const pairs = [];
+          const rentRecords = [];
+
           sortedHistory.forEach(record => {
             if (record.action === 'rent') {
-              rentMap.set(record.serialNumber, { rent: record, return: null });
+              rentRecords.push(record);
             } else if (record.action === 'return') {
-              const rentEntry = rentMap.get(record.serialNumber);
-              if (rentEntry) {
-                rentEntry.return = record;
+              const matchingRent = rentRecords.find(rent => 
+                rent.serialNumber === record.serialNumber && !rent.matched
+              );
+              if (matchingRent) {
+                pairs.push({
+                  serialNumber: record.serialNumber,
+                  modelName: record.deviceInfo?.modelName || matchingRent.deviceInfo?.modelName || 'N/A',
+                  osName: record.deviceInfo?.osName || matchingRent.deviceInfo?.osName || 'N/A',
+                  osVersion: record.deviceInfo?.osVersion || matchingRent.deviceInfo?.osVersion || 'N/A',
+                  userDetails: record.userDetails?.name || matchingRent.userDetails?.name || '알 수 없음',
+                  rentTime: new Date(matchingRent.timestamp).toLocaleString(),
+                  returnTime: new Date(record.timestamp).toLocaleString(),
+                  remark: matchingRent.remark || ''
+                });
+                matchingRent.matched = true;
               } else {
-                rentMap.set(record.serialNumber, { rent: null, return: record });
+                pairs.push({
+                  serialNumber: record.serialNumber,
+                  modelName: record.deviceInfo?.modelName || 'N/A',
+                  osName: record.deviceInfo?.osName || 'N/A',
+                  osVersion: record.deviceInfo?.osVersion || 'N/A',
+                  userDetails: record.userDetails?.name || '알 수 없음',
+                  rentTime: 'N/A',
+                  returnTime: new Date(record.timestamp).toLocaleString(),
+                  remark: ''
+                });
               }
             }
           });
-          const pairs = Array.from(rentMap.values())
-            .map(pair => {
-              const serial = pair.rent?.serialNumber || pair.return.serialNumber;
-              const deviceInfo = pair.rent?.deviceInfo || pair.return?.deviceInfo || {}; // 안전하게 처리
-              console.log('Processing pair:', { serial, deviceInfo });
-              return {
-                serialNumber: serial,
-                modelName: deviceInfo.modelName || 'N/A',
-                osName: deviceInfo.osName || 'N/A',
-                osVersion: deviceInfo.osVersion || 'N/A',
-                rentTime: pair.rent ? new Date(pair.rent.timestamp).toLocaleString() : 'N/A',
-                returnTime: pair.return ? new Date(pair.return.timestamp).toLocaleString() : 'N/A',
-                userId: pair.rent?.userId || pair.return.userId,
-                userDetails: pair.rent?.userDetails || pair.return.userDetails,
-              };
-            })
-            .sort((a, b) => {
-              const aTime = a.rentTime !== 'N/A' ? new Date(a.rentTime) : new Date(a.returnTime);
-              const bTime = b.rentTime !== 'N/A' ? new Date(b.rentTime) : new Date(b.returnTime);
-              return bTime - aTime;
-            });
-          setHistoryPairs(pairs);
-          setOriginalHistoryPairs(pairs);
+
+          rentRecords.forEach(rent => {
+            if (!rent.matched) {
+              pairs.push({
+                serialNumber: rent.serialNumber,
+                modelName: rent.deviceInfo?.modelName || 'N/A',
+                osName: rent.deviceInfo?.osName || 'N/A',
+                osVersion: rent.deviceInfo?.osVersion || 'N/A',
+                userDetails: rent.userDetails?.name || '알 수 없음',
+                rentTime: new Date(rent.timestamp).toLocaleString(),
+                returnTime: 'N/A',
+                remark: rent.remark || ''
+              });
+            }
+          });
+
+          const sortedPairs = pairs.sort((a, b) => {
+            const aTime = a.returnTime !== 'N/A' ? new Date(a.returnTime) : new Date(a.rentTime);
+            const bTime = b.returnTime !== 'N/A' ? new Date(b.returnTime) : new Date(b.rentTime);
+            return bTime - aTime;
+          });
+
+          console.log('Processed history pairs:', sortedPairs);
+          setHistoryPairs(sortedPairs);
+          setOriginalPairs(sortedPairs);
         } else if (isMounted) {
+          console.log('No valid data received, resetting pairs');
           setHistoryPairs([]);
-          setOriginalHistoryPairs([]);
+          setOriginalPairs([]);
         }
       } catch (err) {
         if (isMounted) {
+          console.error('Error fetching history:', err);
+          console.error('Error details:', err.response?.data || err.message);
           setError('데이터를 불러오지 못했습니다. 서버를 확인해 주세요.');
-          console.error('Error fetching data:', err);
         }
       }
     };
@@ -80,18 +114,35 @@ const DeviceHistory = () => {
   }, [token]);
 
   const handleSearch = () => {
+    console.log('Handling search with serial:', searchSerial);
     if (!searchSerial.trim()) {
-      setHistoryPairs(originalHistoryPairs);
+      console.log('Search serial empty, resetting to all pairs');
+      setHistoryPairs(originalPairs);
       return;
     }
-    const filtered = originalHistoryPairs.filter(record =>
-      record.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
+    const filtered = originalPairs.filter(pair =>
+      pair.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
     );
+    console.log('Filtered pairs:', filtered);
     setHistoryPairs(filtered);
   };
 
   const handleReset = () => {
+    console.log('Resetting search');
     setSearchSerial('');
+    setHistoryPairs(originalPairs);
+  };
+
+  const openRemarkModal = (remark) => {
+    console.log('Opening remark modal with remark:', remark);
+    setSelectedRemark(remark);
+    setShowRemarkModal(true);
+  };
+
+  const closeRemarkModal = () => {
+    console.log('Closing remark modal');
+    setShowRemarkModal(false);
+    setSelectedRemark('');
   };
 
   return (
@@ -123,22 +174,56 @@ const DeviceHistory = () => {
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여자</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>대여 시간</th>
               <th style={{ border: '1px solid #ddd', padding: '8px' }}>반납 시간</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px' }}>특이사항</th>
             </tr>
           </thead>
           <tbody>
-            {historyPairs.map((record, index) => (
+            {historyPairs.map((pair, index) => (
               <tr key={index}>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.serialNumber}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.modelName}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.osName}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.osVersion}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.userDetails?.name || '알 수 없음'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.rentTime}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{record.returnTime}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.serialNumber}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.modelName}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.osName}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.osVersion}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.userDetails}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.rentTime}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{pair.returnTime}</td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {pair.remark ? (
+                    <button
+                      onClick={() => openRemarkModal(pair.remark)}
+                      style={{ padding: '5px 10px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      보기
+                    </button>
+                  ) : (
+                    '없음'
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {showRemarkModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white', padding: '20px', borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
+          }}>
+            <h3>특이사항</h3>
+            <p style={{ margin: '20px 0', whiteSpace: 'pre-wrap' }}>{selectedRemark}</p>
+            <button
+              onClick={closeRemarkModal}
+              style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
