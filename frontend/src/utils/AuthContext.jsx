@@ -6,7 +6,8 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
-    return storedUser ? JSON.parse(storedUser) : null;
+    console.log('Initial user from localStorage:', storedUser);
+    return storedUser ? JSON.parse(storedUser) : null; // 새로고침 시 초기값 유지
   });
   const [loading, setLoading] = useState(true);
 
@@ -18,40 +19,59 @@ export function AuthProvider({ children }) {
         const token = localStorage.getItem('token');
         console.log('AuthContext - Stored User:', storedUser);
         console.log('AuthContext - Token:', token);
-        if (storedUser && token) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          console.log('AuthContext - Fetching /api/me');
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          console.log('AuthContext - Response:', response.data);
-          if (!response.data || !response.data.user) {
-            throw new Error('Invalid user data');
+
+        if (!token) {
+          console.log('No token found, skipping auth initialization');
+          if (!['/login', '/register'].includes(window.location.pathname)) {
+            window.location.href = '/login';
           }
-          setUser(response.data.user);
-          localStorage.setItem('user', JSON.stringify(response.data.user));
-        } else if (!['/login', '/register'].includes(window.location.pathname)) {
-          console.log('AuthContext - No token/user, redirecting to login');
-          setUser(null);
-          window.location.href = '/login';
+          return;
         }
+
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          console.log('Setting user from stored data:', parsedUser);
+          setUser(parsedUser); // 로컬 데이터로 상태 복원
+        }
+
+        console.log('Fetching /api/me to validate token');
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log('AuthContext - /api/me Response:', response.data);
+
+        if (!response.data || !response.data.user) {
+          throw new Error('Invalid user data from /api/me');
+        }
+
+        setUser(response.data.user);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        console.log('User updated from /api/me:', response.data.user);
       } catch (error) {
         console.error('AuthContext - Error initializing auth:', error);
-        setUser(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        if (!['/login', '/register'].includes(window.location.pathname)) {
-          window.location.href = '/login';
+        console.error('Error details:', error.response?.data || error.message);
+        // 토큰이 있고 API만 실패한 경우, 기존 로컬 데이터 유지
+        if (localStorage.getItem('token') && localStorage.getItem('user')) {
+          console.log('Keeping existing user data due to API failure');
+        } else {
+          setUser(null);
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          if (!['/login', '/register'].includes(window.location.pathname)) {
+            console.log('No valid token/user, redirecting to login');
+            window.location.href = '/login';
+          }
         }
       } finally {
         setLoading(false);
+        console.log('Auth initialization completed, loading:', false);
       }
     };
     initializeAuth();
-  }, []); // 의존성 배열 유지, 로그인 후 setUser로 동기화
+  }, []);
 
   const logout = () => {
+    console.log('Logging out user');
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
