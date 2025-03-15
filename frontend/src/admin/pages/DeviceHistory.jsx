@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { saveAs } from 'file-saver';
 
-const DeviceHistory = () => {
+function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
   const [originalPairs, setOriginalPairs] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
-  const [showRemarkModal, setShowRemarkModal] = useState(false);
-  const [selectedRemark, setSelectedRemark] = useState('');
+  const [showRemarkModal, setShowRemarkModal] = useState(false); // 상태 추가
+  const [selectedRemark, setSelectedRemark] = useState(''); // 상태 추가
+  const [selectedPeriod, setSelectedPeriod] = useState('all');
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-  console.log('DeviceHistory initialized - token:', token);
-  console.log('DeviceHistory initialized - apiUrl:', apiUrl);
-
   useEffect(() => {
-    if (!token) {
-      console.log('No token found, setting error');
-      setError('토큰이 없습니다. 로그인 해 주세요.');
-      return;
-    }
     let isMounted = true;
 
     const fetchData = async () => {
@@ -99,9 +94,9 @@ const DeviceHistory = () => {
         }
       } catch (err) {
         if (isMounted) {
+          setError('데이터를 불러오지 못했습니다. 서버를 확인해 주세요.');
           console.error('Error fetching history:', err);
           console.error('Error details:', err.response?.data || err.message);
-          setError('데이터를 불러오지 못했습니다. 서버를 확인해 주세요.');
         }
       }
     };
@@ -120,7 +115,7 @@ const DeviceHistory = () => {
       setHistoryPairs(originalPairs);
       return;
     }
-    const filtered = originalPairs.filter(pair =>
+    const filtered = originalPairs.filter(pair => 
       pair.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
     );
     console.log('Filtered pairs:', filtered);
@@ -131,6 +126,25 @@ const DeviceHistory = () => {
     console.log('Resetting search');
     setSearchSerial('');
     setHistoryPairs(originalPairs);
+  };
+
+  const handleExport = async () => {
+    let payload = { period: selectedPeriod };
+    if (selectedPeriod === 'custom' && customDateRange.start && customDateRange.end) {
+      payload = { ...payload, startDate: customDateRange.start, endDate: customDateRange.end };
+    }
+    try {
+      console.log('Exporting history with payload:', payload);
+      const response = await axios.post(`${apiUrl}/api/devices/history/export`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'arraybuffer'
+      });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `history_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('엑셀 내보내기에 실패했습니다.');
+    }
   };
 
   const openRemarkModal = (remark) => {
@@ -160,6 +174,42 @@ const DeviceHistory = () => {
         <button onClick={handleReset} style={{ marginLeft: '10px' }}>
           초기화
         </button>
+        <div style={{ marginTop: '10px' }}>
+          <label>기간 선택: </label>
+          <select
+            value={selectedPeriod}
+            onChange={(e) => {
+              setSelectedPeriod(e.target.value);
+              if (e.target.value !== 'custom') {
+                setCustomDateRange({ start: '', end: '' });
+              }
+            }}
+            style={{ padding: '5px', marginRight: '10px' }}
+          >
+            <option value="all">전체</option>
+            <option value="week">지난 1주일</option>
+            <option value="month">지난 1개월</option>
+            <option value="custom">사용자 지정</option>
+          </select>
+          {selectedPeriod === 'custom' && (
+            <div style={{ display: 'inline-block', marginLeft: '10px' }}>
+              <input
+                type="date"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange({ ...customDateRange, start: e.target.value })}
+                style={{ padding: '5px' }}
+              />
+              <span style={{ margin: '0 5px' }}>~</span>
+              <input
+                type="date"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange({ ...customDateRange, end: e.target.value })}
+                style={{ padding: '5px' }}
+              />
+            </div>
+          )}
+          <button onClick={handleExport} style={{ marginLeft: '10px' }}>엑셀 다운로드</button>
+        </div>
       </div>
       {error && <p style={{ color: 'red' }}>{error}</p>}
       {!error && historyPairs.length === 0 && <p>대여 히스토리가 없습니다.</p>}
@@ -227,6 +277,6 @@ const DeviceHistory = () => {
       )}
     </div>
   );
-};
+}
 
 export default DeviceHistory;

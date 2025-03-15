@@ -5,6 +5,7 @@ const User = require('../models/User');
 const RentalHistory = require('../models/RentalHistory');
 const jwt = require('jsonwebtoken');
 const { adminAuth } = require('./middleware');
+const xlsx = require('xlsx');
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 
 // 현재 대여 현황
@@ -232,6 +233,72 @@ router.post('/return-device', async (req, res) => {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+router.post('/history/export', async (req, res) => {
+  const { period, startDate, endDate } = req.body;
+  try {
+    let query = {};
+    if (period === 'week') {
+      const now = new Date();
+      const start = new Date(now.setDate(now.getDate() - 7));
+      query.timestamp = { $gte: start, $lte: new Date() };
+    } else if (period === 'month') {
+      const now = new Date();
+      const start = new Date(now.setMonth(now.getMonth() - 1));
+      query.timestamp = { $gte: start, $lte: new Date() };
+    } else if (period === 'custom' && startDate && endDate) {
+      query.timestamp = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    console.log('Exporting history with query:', query);
+    const history = await RentalHistory.find(query).sort({ timestamp: -1 }).lean();
+    console.log('Fetched history for export:', history);
+
+    // 월별로 데이터 그룹화
+    const historyByMonth = {};
+    history.forEach(record => {
+      const date = new Date(record.timestamp);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM 형식
+      if (!historyByMonth[monthKey]) {
+        historyByMonth[monthKey] = [];
+      }
+      historyByMonth[monthKey].push({
+        '시리얼 번호': record.serialNumber,
+        '모델명': record.deviceInfo?.modelName || 'N/A',
+        'OS 이름': record.deviceInfo?.osName || 'N/A',
+        'OS 버전': record.deviceInfo?.osVersion || 'N/A',
+        '대여자': record.userDetails?.name || 'N/A',
+        '대여 시간': record.timestamp ? new Date(record.timestamp).toLocaleString() : 'N/A',
+        '반납 시간': record.action === 'return' ? new Date(record.timestamp).toLocaleString() : 'N/A',
+        '특이사항': record.remark || '없음'
+      });
+    });
+
+    console.log('Grouped history by month:', historyByMonth);
+
+    // 엑셀 워크북 생성
+    const wb = xlsx.utils.book_new();
+    for (const monthKey in historyByMonth) {
+      const ws = xlsx.utils.json_to_sheet(historyByMonth[monthKey]);
+      xlsx.utils.book_append_sheet(wb, ws, monthKey); // 각 월별 시트 추가
+    }
+
+    // 워크북이 비어 있는 경우 기본 시트 추가
+    if (!Object.keys(historyByMonth).length) {
+      const ws = xlsx.utils.json_to_sheet([]);
+      xlsx.utils.book_append_sheet(wb, ws, 'Empty');
+    }
+
+    const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename=history_export.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ message: '엑셀 내보내기 실패' });
   }
 });
 
