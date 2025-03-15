@@ -48,6 +48,22 @@ router.post('/register', async (req, res) => {
   }
 });
 
+router.post('/check-id', async (req, res) => {
+  const { id } = req.body;
+  try {
+    console.log('Checking ID:', id);
+    const existingUser = await User.findOne({ id });
+    if (existingUser) {
+      return res.json({ available: false });
+    }
+    res.json({ available: true });
+  } catch (error) {
+    console.error('Check ID error:', error);
+    res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+
 router.post('/login', async (req, res) => {
   const { id, password } = req.body;
   try {
