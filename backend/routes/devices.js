@@ -245,11 +245,41 @@ router.post('/history/export', async (req, res) => {
 // 익스포트 내역 조회 (관리자용)
 router.get('/history/exports', adminAuth, async (req, res) => {
   try {
-    const exports = await ExportHistory.find().sort({ timestamp: -1 }).lean();
+    console.log('Received query:', req.query);
+    let query = {};
+    if (req.query.startDate && req.query.endDate) {
+      const start = new Date(req.query.startDate);
+      const end = new Date(req.query.endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      query.timestamp = {
+        $gte: start,
+        $lte: end
+      };
+      console.log('Applying date filter:', { start, end });
+    }
+    console.log('Query for ExportHistory:', query);
+    const exports = await ExportHistory.find(query).sort({ timestamp: -1 }).lean();
+    console.log('Fetched exports:', exports.length, exports.map(exp => exp.timestamp));
     res.json(exports);
   } catch (error) {
     console.error('Fetch export history error:', error);
     res.status(500).json({ message: '익스포트 내역 조회 실패' });
+  }
+});
+
+// 익스포트 내역 최소 날짜 조회 (관리자용)
+router.get('/history/exports/min-date', adminAuth, async (req, res) => {
+  try {
+    const oldestExport = await ExportHistory.findOne().sort({ timestamp: 1 }).lean();
+    if (!oldestExport) {
+      return res.status(200).json({ minDate: '2020-01-01T00:00:00.000Z' }); // 기본값
+    }
+    res.status(200).json({ minDate: oldestExport.timestamp });
+  } catch (error) {
+    console.error('Fetch min date error:', error);
+    res.status(500).json({ message: '최소 날짜 조회 실패' });
   }
 });
 
