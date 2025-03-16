@@ -5,18 +5,22 @@ const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('./utils/auth');
+const RentalHistory = require('./models/RentalHistory'); // 누락된 모델 추가
+const ExportHistory = require('./models/ExportHistory');
+const Device = require('./models/Device');
+const User = require('./models/User');
+const fs = require('fs');
+const path = require('path');
 
 const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/devices');
 const approveRoutes = require('./routes/admin/approve');
 const usersRoutes = require('./routes/admin/users');
-const Device = require('./models/Device');
-const User = require('./models/User');
 
 const app = express();
 
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -34,6 +38,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/admin', approveRoutes);
 app.use('/api/admin', usersRoutes);
+app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
 const excelFile = process.env.EXCEL_FILE_PATH || './device-data.xlsx';
 const initDevices = async (force = false) => {
@@ -42,7 +47,7 @@ const initDevices = async (force = false) => {
     console.log('Current device count:', count);
     if (count > 0 && !force) {
       console.log('Existing devices found, skipping full initialization. Checking for updates...');
-      return; // 업데이트도 스킵
+      return;
     }
     const indexes = await mongoose.connection.db.collection('devices').indexes();
     if (indexes.some(index => index.name === 'id_1')) {
@@ -141,6 +146,98 @@ app.post('/api/admin/init-devices', async (req, res) => {
   }
 });
 
+const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
+const EXPORT_DIR = path.resolve(__dirname, 'exports');
+
+if (!fs.existsSync(EXPORT_DIR)) {
+  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+  console.log('Created exports directory:', EXPORT_DIR);
+}
+
+// 2년 초과 데이터 익스포트 및 삭제 로직
+
+const exportRetentionData = async () => {
+  try {
+    const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
+    console.log('Attempting to check retention data at:', new Date().toISOString());
+    console.log('Exporting retention data with query:', query);
+    const history = await RentalHistory.find(query).sort({ timestamp: -1 }).lean();
+    console.log('Fetched history for export:', history.length, history);
+
+    if (history.length === 0) {
+      console.log('No data older than 2 years found');
+      return;
+    }
+
+    const historyByMonth = {};
+    history.forEach(record => {
+      const date = new Date(record.timestamp);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!historyByMonth[monthKey]) {
+        historyByMonth[monthKey] = [];
+      }
+      historyByMonth[monthKey].push({
+        '시리얼 번호': record.serialNumber,
+        '모델명': record.deviceInfo?.modelName || 'N/A',
+        'OS 이름': record.deviceInfo?.osName || 'N/A',
+        'OS 버전': record.deviceInfo?.osVersion || 'N/A',
+        '대여자': record.userDetails?.name || 'N/A',
+        '대여 시간': record.timestamp ? new Date(record.timestamp).toLocaleString() : 'N/A',
+        '반납 시간': record.action === 'return' ? new Date(record.timestamp).toLocaleString() : 'N/A',
+        '특이사항': record.remark || '없음'
+      });
+    });
+
+    const wb = xlsx.utils.book_new();
+    for (const monthKey in historyByMonth) {
+      const ws = xlsx.utils.json_to_sheet(historyByMonth[monthKey]);
+      xlsx.utils.book_append_sheet(wb, ws, monthKey);
+    }
+
+    const fileName = `retention_export_${new Date().toISOString().replace(/[:]/g, '-')}.xlsx`;
+    const filePath = path.join(EXPORT_DIR, fileName);
+    const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+    try {
+      fs.writeFileSync(filePath, buffer);
+      console.log('Retention data exported to:', filePath);
+    } catch (writeError) {
+      console.error('File write error:', writeError);
+      throw new Error('Failed to save export file');
+    }
+
+    const deleteResult = await RentalHistory.deleteMany(query);
+    console.log('Deleted retention data result:', deleteResult);
+    if (deleteResult.deletedCount > 0) {
+      console.log(`Deleted ${deleteResult.deletedCount} records from database`);
+    } else {
+      console.log('No records deleted from database');
+    }
+
+    const deletedSerialNumbers = history.map(record => record.serialNumber);
+    await Device.updateMany(
+      { serialNumber: { $in: deletedSerialNumbers }, rentedAt: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } },
+      { $set: { rentedBy: null, rentedAt: null, remark: '' } }
+    );
+    console.log('Updated devices with expired rentals');
+
+    // 익스포트 로그 저장
+    await ExportHistory.create({
+      timestamp: new Date(),
+      filePath: `/exports/${fileName}`,
+      recordCount: history.length,
+      deletedCount: deleteResult.deletedCount,
+      performedBy: 'system' // 자동 실행 시 system으로 설정
+    });
+  } catch (error) {
+    console.error('Retention export error:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      name: error.name
+    });
+  }
+};
 const PORT = process.env.PORT || 4000;
 
 mongoose
@@ -149,6 +246,11 @@ mongoose
     console.log('MongoDB connected');
     // 초기화는 API 호출로만 실행
     console.log('Device initialization skipped. Use /api/admin/init-devices to initialize devices.');
+    await exportRetentionData(); // 서버 시작 시 즉시 체크
+    setInterval(() => {
+      console.log('Checking retention data at:', new Date().toISOString());
+      exportRetentionData().catch(err => console.error('Interval execution error:', err));
+    }, 5 * 60 * 1000); // 5분 주기
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -168,12 +270,21 @@ app.get('/api/data', async (req, res) => {
 });
 
 app.get('/api/me', async (req, res) => {
+  console.log('Received /api/me request with token:', req.headers.authorization);
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) {
+    console.log('No token provided');
+    return res.status(401).json({ message: 'No token provided' });
+  }
   try {
     const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    console.log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.log('User not found for id:', decoded.id);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    console.log('User found:', user);
     res.json({
       user: {
         id: user.id,
@@ -212,3 +323,5 @@ app.post('/api/sync', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+module.exports = app;

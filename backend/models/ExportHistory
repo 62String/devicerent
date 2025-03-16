@@ -1,0 +1,13 @@
+// models/ExportHistory.js
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
+
+const ExportHistorySchema = new Schema({
+  timestamp: { type: Date, default: Date.now },
+  filePath: { type: String, required: true },
+  recordCount: { type: Number, required: true },
+  deletedCount: { type: Number, required: true },
+  performedBy: { type: String, default: 'system' } // system 또는 사용자 ID
+}, { strict: true });
+
+module.exports = mongoose.model('ExportHistory', ExportHistorySchema);

@@ -6,11 +6,13 @@ import DevicesSubMenu from './admin/pages/Devices';
 import UsersPage from './admin/pages/UsersPage';
 import PendingUsersPage from './admin/pages/PendingUsersPage';
 import DeviceManage from './admin/pages/DeviceManage';
-import DeviceHistory from './admin/pages/DeviceHistory'; // 경로 확인
+import DeviceHistory from './admin/pages/DeviceHistory';
 import Devices from './Devices';
 import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
 import Register from './Register';
+import ExportHistory from './admin/pages/ExportHistory'; // 추가
+import NotFound from './NotFound'; // NotFound.jsx 생성 필요
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import Navbar from './admin/components/Navbar';
 
@@ -22,7 +24,9 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('ErrorBoundary caught an error:', error, errorInfo);
+    }
     this.setState({ error, errorInfo });
   }
 
@@ -36,6 +40,7 @@ class ErrorBoundary extends Component {
             <br />
             {this.state.errorInfo && this.state.errorInfo.componentStack}
           </details>
+          <a href="/login">홈으로 돌아가기</a>
         </div>
       );
     }
@@ -45,20 +50,29 @@ class ErrorBoundary extends Component {
 
 const ProtectedRoute = ({ element, isAdmin = false }) => {
   const { user } = useAuth();
-  console.log('ProtectedRoute user:', user);
-  console.log('ProtectedRoute isAdmin required:', isAdmin);
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('ProtectedRoute user:', user);
+    console.log('ProtectedRoute isAdmin required:', isAdmin);
+  }
 
   if (!user) {
-    console.log('ProtectedRoute: Redirecting to /login due to user null');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ProtectedRoute: Redirecting to /login due to user null');
+    }
     return <Navigate to="/login" replace />;
   }
 
   if (isAdmin && !user.isAdmin) {
-    console.log('ProtectedRoute: Redirecting to /devices due to not admin');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ProtectedRoute: Redirecting to /devices due to not admin');
+    }
     return <Navigate to="/devices" replace />;
   }
 
-  console.log('ProtectedRoute: Access granted');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('ProtectedRoute: Access granted');
+  }
   return element;
 };
 
@@ -87,6 +101,10 @@ function App() {
               path="/admin/pending"
               element={<ProtectedRoute element={<PendingUsersPage />} isAdmin={true} />}
             />
+            <Route
+              path="/admin/export-history"
+              element={<ProtectedRoute element={<ExportHistory />} isAdmin={true} />}
+            />
             <Route path="/devices" element={<Devices />} />
             <Route path="/devices/status" element={<DeviceStatus />} />
             <Route path="/devices/history" element={<DeviceHistory />} />
@@ -95,6 +113,7 @@ function App() {
               element={<ProtectedRoute element={<DeviceManage />} isAdmin={true} />}
             />
             <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </ErrorBoundary>
       </Router>
