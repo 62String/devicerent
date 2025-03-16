@@ -1,8 +1,6 @@
 import React, { Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AdminPage from './admin/pages/AdminPage';
-import SyncPage from './admin/pages/syncpage';
-import DevicesSubMenu from './admin/pages/Devices';
 import UsersPage from './admin/pages/UsersPage';
 import PendingUsersPage from './admin/pages/PendingUsersPage';
 import DeviceManage from './admin/pages/DeviceManage';
@@ -11,8 +9,8 @@ import Devices from './Devices';
 import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
 import Register from './Register';
-import ExportHistory from './admin/pages/ExportHistory'; // 추가
-import NotFound from './NotFound'; // NotFound.jsx 생성 필요
+import ExportHistory from './admin/pages/ExportHistory';
+import NotFound from './NotFound';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import Navbar from './admin/components/Navbar';
 
@@ -88,10 +86,6 @@ function App() {
             <Route
               path="/admin"
               element={<ProtectedRoute element={<AdminPage />} isAdmin={true} />}
-            />
-            <Route
-              path="/admin/sync"
-              element={<ProtectedRoute element={<SyncPage />} isAdmin={true} />}
             />
             <Route
               path="/admin/users"

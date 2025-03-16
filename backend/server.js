@@ -407,25 +407,7 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-app.post('/api/sync', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
-  try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    if (!decoded.id || !(await User.findOne({ id: decoded.id, isAdmin: true }))) {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-    let syncData = req.body || {};
-    syncData = { ...syncData, id: syncData.id || 1, deviceInfo: syncData.deviceInfo || 'Device123' };
-    delete syncData.category;
-    delete syncData.osVersion;
-    delete syncData.location;
-    res.json(syncData);
-  } catch (err) {
-    console.error('Sync error:', err);
-    return res.status(403).json({ message: 'Invalid token' });
-  }
-});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
