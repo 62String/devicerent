@@ -9,7 +9,8 @@ function Devices() {
   const [searchSerial, setSearchSerial] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showRentModal, setShowRentModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showRemarkPrompt, setShowRemarkPrompt] = useState(false);
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -19,7 +20,7 @@ function Devices() {
   const [statusReason, setStatusReason] = useState('');
   const [remark, setRemark] = useState('');
   const [selectedRemark, setSelectedRemark] = useState('');
-  const [showAllDevices, setShowAllDevices] = useState(false); // 토글 상태 추가
+  const [showAllDevices, setShowAllDevices] = useState(false);
   const { user } = useAuth();
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -47,7 +48,6 @@ function Devices() {
       const activeDevices = (response.data || []).filter(device => device && device.status === 'active');
       console.log('Active devices:', activeDevices);
       setDevices(activeDevices);
-      // 기본 필터링: 대여 가능 + 내가 대여한 디바이스
       const defaultFiltered = activeDevices.filter(device => 
         device && (!device.rentedBy || (device.rentedBy && device.rentedBy.name === user?.name))
       );
@@ -83,27 +83,53 @@ function Devices() {
     }
   };
 
-  const openRentModal = (serialNumber) => {
+  const handleRentDevice = (serialNumber) => {
     if (!serialNumber) {
       console.error('Invalid serialNumber:', serialNumber);
       alert('유효한 디바이스를 선택해 주세요.');
       return;
     }
-    console.log('Opening rent modal for serialNumber:', serialNumber);
+    console.log('Opening confirm modal for serialNumber:', serialNumber);
     setCurrentSerialNumber(serialNumber);
-    setShowRentModal(true);
+    setShowConfirmModal(true);
   };
 
-  const closeRentModal = () => {
-    console.log('Closing rent modal');
-    setShowRentModal(false);
-    setCurrentSerialNumber(null);
+  const confirmRent = () => {
+    setShowConfirmModal(false);
+    setShowRemarkPrompt(true);
   };
 
-  const openRemarkModal = () => {
-    console.log('Opening remark input modal');
-    setShowRentModal(false);
-    setShowRemarkModal(true);
+  const handleRemarkPrompt = (hasRemark) => {
+    setShowRemarkPrompt(false);
+    if (hasRemark) {
+      setShowRemarkModal(true);
+    } else {
+      submitRent();
+    }
+  };
+
+  const submitRent = async () => {
+    if (!currentSerialNumber) {
+      alert('대여할 디바이스를 선택해 주세요.');
+      return;
+    }
+    try {
+      console.log('Renting device with serialNumber:', currentSerialNumber, 'Token:', token, 'Remark:', remark);
+      const payload = { deviceId: currentSerialNumber, remark };
+      const response = await axios.post(`${apiUrl}/api/devices/rent-device`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log('Rent response:', response.data);
+      alert(response.data.message);
+      fetchDevices();
+    } catch (error) {
+      console.error('Rent error details:', error.response?.data || error.message);
+      alert(error.response?.data?.message || 'Rent failed');
+    } finally {
+      setShowRemarkModal(false);
+      setRemark('');
+      setCurrentSerialNumber(null);
+    }
   };
 
   const closeRemarkModal = () => {
@@ -158,30 +184,6 @@ function Devices() {
     console.log('Closing remark view modal');
     setShowRemarkViewModal(false);
     setSelectedRemark('');
-  };
-
-  const handleRent = async (withRemark = false) => {
-    if (!currentSerialNumber) {
-      alert('대여할 디바이스를 선택해 주세요.');
-      return;
-    }
-    try {
-      console.log('Renting device with serialNumber:', currentSerialNumber, 'Token:', token, 'Remark:', remark);
-      const payload = { deviceId: currentSerialNumber };
-      if (withRemark) payload.remark = remark;
-      const response = await axios.post(`${apiUrl}/api/devices/rent-device`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      console.log('Rent response:', response.data);
-      alert(response.data.message);
-      fetchDevices();
-    } catch (error) {
-      console.error('Rent error details:', error.response?.data || error.message);
-      alert(error.response?.data?.message || 'Rent failed');
-    } finally {
-      closeRentModal();
-      closeRemarkModal();
-    }
   };
 
   const handleReturn = async (withStatusChange = false) => {
@@ -336,7 +338,7 @@ function Devices() {
                       <span>대여중</span>
                     )
                   ) : (
-                    <button onClick={() => openRentModal(device.serialNumber)}>[대여]</button>
+                    <button onClick={() => handleRentDevice(device.serialNumber)}>[대여]</button>
                   )}
                 </td>
               </tr>
@@ -346,7 +348,33 @@ function Devices() {
       ) : (
         <p>디바이스 목록이 없습니다.</p>
       )}
-      {showRentModal && (
+      {showConfirmModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white', padding: '20px', borderRadius: '5px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
+          }}>
+            <h3>대여 하시겠습니까?</h3>
+            <button
+              onClick={confirmRent}
+              style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px' }}
+            >
+              예
+            </button>
+            <button
+              onClick={() => setShowConfirmModal(false)}
+              style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+            >
+              아니오
+            </button>
+          </div>
+        </div>
+      )}
+      {showRemarkPrompt && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
@@ -357,26 +385,24 @@ function Devices() {
             boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
           }}>
             <h3>특이사항이 있으십니까?</h3>
-            <div style={{ marginTop: '20px' }}>
-              <button
-                onClick={() => handleRent(false)}
-                style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-              >
-                아니오
-              </button>
-              <button
-                onClick={openRemarkModal}
-                style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-              >
-                예
-              </button>
-            </div>
+            <button
+              onClick={() => handleRemarkPrompt(true)}
+              style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px' }}
+            >
+              예
+            </button>
+            <button
+              onClick={() => handleRemarkPrompt(false)}
+              style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+            >
+              아니오
+            </button>
           </div>
         </div>
       )}
       {showRemarkModal && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: '0',
           backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
           justifyContent: 'center', alignItems: 'center'
         }}>
@@ -384,27 +410,28 @@ function Devices() {
             backgroundColor: 'white', padding: '20px', borderRadius: '5px',
             boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
           }}>
-            <h3>특이사항을 입력하세요</h3>
+            <h3>특이사항 입력</h3>
             <textarea
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
-              placeholder="특이사항을 입력하세요 (예: 장기 대여)"
-              style={{ width: '100%', height: '80px', padding: '5px', margin: '10px 0', resize: 'none' }}
+              placeholder="특이사항을 입력하세요"
+              style={{ width: '100%', height: '100px', margin: '10px 0' }}
             />
-            <div>
-              <button
-                onClick={() => handleRent(true)}
-                style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-              >
-                확인
-              </button>
-              <button
-                onClick={closeRemarkModal}
-                style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-              >
-                취소
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setShowRemarkModal(false);
+                submitRent();
+              }}
+              style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px' }}
+            >
+              확인
+            </button>
+            <button
+              onClick={closeRemarkModal}
+              style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+            >
+              취소
+            </button>
           </div>
         </div>
       )}
