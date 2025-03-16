@@ -215,148 +215,154 @@ function DeviceHistory() {
   const pageCount = Math.ceil(historyPairs.length / perPage);
 
   return (
-    <div className="container mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-4 text-gray-800">대여 히스토리</h2>
-      <div className="mb-6 flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-md">
-        <input
-          type="text"
-          value={searchSerial}
-          onChange={(e) => setSearchSerial(e.target.value)}
-          placeholder="시리얼 번호 검색"
-          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-          검색
-        </button>
-        <button onClick={handleReset} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-          초기화
-        </button>
-        <div className="flex items-center gap-2">
-          <label className="text-gray-700">기간 선택:</label>
-          <select
-            value={selectedPeriod}
-            onChange={(e) => {
-              setSelectedPeriod(e.target.value);
-              if (e.target.value !== 'custom') {
-                setCustomDateRange({ start: '', end: '' });
-              }
-            }}
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-blue-900 text-white p-4">
+        <h2 className="text-2xl font-bold text-center">대여 히스토리</h2>
+      </header>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <div className="mb-6 flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-md justify-center">
+          <input
+            type="text"
+            value={searchSerial}
+            onChange={(e) => setSearchSerial(e.target.value)}
+            placeholder="시리얼 번호 검색"
             className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">전체</option>
-            <option value="week">지난 1주일</option>
-            <option value="month">지난 1개월</option>
-            <option value="custom">사용자 지정</option>
-          </select>
-          {selectedPeriod === 'custom' && (
-            <div className="flex items-center gap-2">
-              <DatePicker
-                selected={customDateRange.start ? new Date(customDateRange.start) : null}
-                onChange={date => setCustomDateRange({ ...customDateRange, start: date.toISOString().split('T')[0] })}
-                selectsStart
-                startDate={customDateRange.start ? new Date(customDateRange.start) : null}
-                endDate={customDateRange.end ? new Date(customDateRange.end) : null}
-                minDate={new Date('2020-01-01')}
-                placeholderText="시작 날짜"
-                locale={ko}
-                weekStartsOn={0}
-                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="text-gray-500">~</span>
-              <DatePicker
-                selected={customDateRange.end ? new Date(customDateRange.end) : null}
-                onChange={date => setCustomDateRange({ ...customDateRange, end: date.toISOString().split('T')[0] })}
-                selectsEnd
-                startDate={customDateRange.start ? new Date(customDateRange.start) : null}
-                endDate={customDateRange.end ? new Date(customDateRange.end) : null}
-                minDate={customDateRange.start ? new Date(customDateRange.start) : new Date('2020-01-01')}
-                placeholderText="종료 날짜"
-                locale={ko}
-                weekStartsOn={0}
-                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          )}
-          <button onClick={handleExport} className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
-            엑셀 다운로드
-          </button>
-        </div>
-      </div>
-      {error && <p className="text-red-500">{error}</p>}
-      {!error && historyPairs.length === 0 && <p>대여 히스토리가 없습니다.</p>}
-      {!error && historyPairs.length > 0 && (
-        <>
-          <table className="w-full border-collapse bg-white shadow-md rounded-lg">
-            <thead>
-              <tr className="bg-blue-50">
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">시리얼 번호</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">기기명</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 이름</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 버전</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여자</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여 시간</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">반납 시간</th>
-                <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">특이사항</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentPairs.map((pair, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="border border-gray-200 p-2">{pair.serialNumber}</td>
-                  <td className="border border-gray-200 p-2">{pair.modelName}</td>
-                  <td className="border border-gray-200 p-2">{pair.osName}</td>
-                  <td className="border border-gray-200 p-2">{pair.osVersion}</td>
-                  <td className="border border-gray-200 p-2">{pair.userDetails}</td>
-                  <td className="border border-gray-200 p-2">{pair.rentTime}</td>
-                  <td className="border border-gray-200 p-2">{pair.returnTime}</td>
-                  <td className="border border-gray-200 p-2">
-                    {pair.remark ? (
-                      <button
-                        onClick={() => openRemarkModal(pair.remark)}
-                        className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        보기
-                      </button>
-                    ) : (
-                      '없음'
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <ReactPaginate
-            previousLabel={'이전'}
-            nextLabel={'다음'}
-            breakLabel={'...'}
-            pageCount={pageCount}
-            marginPagesDisplayed={2}
-            pageRangeDisplayed={5}
-            onPageChange={handlePageClick}
-            containerClassName={'flex flex-row justify-center items-center space-x-2 mt-4 list-none'}
-            activeClassName={'bg-blue-600 text-white rounded-md'}
-            pageClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100'}
-            previousClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
-            nextClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
-            breakClassName={'px-3 py-1'}
-            disabledClassName={'opacity-50 cursor-not-allowed'}
           />
-        </>
-      )}
-      {showRemarkModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded-lg shadow-lg w-96 text-center">
-            <h3 className="text-lg font-semibold mb-2 text-gray-800">특이사항</h3>
-            <p className="mb-4 whitespace-pre-wrap text-gray-600">{selectedRemark}</p>
-            <button
-              onClick={closeRemarkModal}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+            검색
+          </button>
+          <button onClick={handleReset} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+            초기화
+          </button>
+          <div className="flex items-center gap-2">
+            <label className="text-gray-700">기간 선택:</label>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => {
+                setSelectedPeriod(e.target.value);
+                if (e.target.value !== 'custom') {
+                  setCustomDateRange({ start: '', end: '' });
+                }
+              }}
+              className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              닫기
+              <option value="all">전체</option>
+              <option value="week">지난 1주일</option>
+              <option value="month">지난 1개월</option>
+              <option value="custom">사용자 지정</option>
+            </select>
+            {selectedPeriod === 'custom' && (
+              <div className="flex items-center gap-2">
+                <DatePicker
+                  selected={customDateRange.start ? new Date(customDateRange.start) : null}
+                  onChange={date => setCustomDateRange({ ...customDateRange, start: date.toISOString().split('T')[0] })}
+                  selectsStart
+                  startDate={customDateRange.start ? new Date(customDateRange.start) : null}
+                  endDate={customDateRange.end ? new Date(customDateRange.end) : null}
+                  minDate={new Date('2020-01-01')}
+                  placeholderText="시작 날짜"
+                  locale={ko}
+                  weekStartsOn={0}
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-500">~</span>
+                <DatePicker
+                  selected={customDateRange.end ? new Date(customDateRange.end) : null}
+                  onChange={date => setCustomDateRange({ ...customDateRange, end: date.toISOString().split('T')[0] })}
+                  selectsEnd
+                  startDate={customDateRange.start ? new Date(customDateRange.start) : null}
+                  endDate={customDateRange.end ? new Date(customDateRange.end) : null}
+                  minDate={customDateRange.start ? new Date(customDateRange.start) : new Date('2020-01-01')}
+                  placeholderText="종료 날짜"
+                  locale={ko}
+                  weekStartsOn={0}
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+            <button onClick={handleExport} className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+              엑셀 다운로드
             </button>
           </div>
         </div>
-      )}
+        {error && <p className="text-red-500 text-center">{error}</p>}
+        {!error && historyPairs.length === 0 && <p className="text-gray-600 text-center">대여 히스토리가 없습니다.</p>}
+        {!error && historyPairs.length > 0 && (
+          <>
+            <div className="overflow-x-auto mx-auto max-w-[1024px]">
+              <table className="min-w-[1024px] border-collapse bg-white shadow-md rounded-lg">
+                <thead>
+                  <tr className="bg-blue-50">
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">시리얼 번호</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">기기명</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 이름</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 버전</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여자</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여 시간</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">반납 시간</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">특이사항</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentPairs.map((pair, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-200 p-2">{pair.serialNumber}</td>
+                      <td className="border border-gray-200 p-2">{pair.modelName}</td>
+                      <td className="border border-gray-200 p-2">{pair.osName}</td>
+                      <td className="border border-gray-200 p-2">{pair.osVersion}</td>
+                      <td className="border border-gray-200 p-2">{pair.userDetails}</td>
+                      <td className="border border-gray-200 p-2">{pair.rentTime}</td>
+                      <td className="border border-gray-200 p-2">{pair.returnTime}</td>
+                      <td className="border border-gray-200 p-2">
+                        {pair.remark ? (
+                          <button
+                            onClick={() => openRemarkModal(pair.remark)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            보기
+                          </button>
+                        ) : (
+                          '없음'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ReactPaginate
+              previousLabel={'이전'}
+              nextLabel={'다음'}
+              breakLabel={'...'}
+              pageCount={pageCount}
+              marginPagesDisplayed={2}
+              pageRangeDisplayed={5}
+              onPageChange={handlePageClick}
+              containerClassName={'flex flex-row justify-center items-center space-x-2 mt-4 list-none'}
+              activeClassName={'bg-blue-600 text-white rounded-md'}
+              pageClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100'}
+              previousClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
+              nextClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
+              breakClassName={'px-3 py-1'}
+              disabledClassName={'opacity-50 cursor-not-allowed'}
+            />
+          </>
+        )}
+        {showRemarkModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div className="bg-white p-4 rounded-lg shadow-lg w-96 text-center">
+              <h3 className="text-lg font-semibold mb-2 text-gray-800">특이사항</h3>
+              <p className="mb-4 whitespace-pre-wrap text-gray-600">{selectedRemark}</p>
+              <button
+                onClick={closeRemarkModal}
+                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

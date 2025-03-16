@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 
 function AdminPage() {
-  const { logout } = useAuth();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [downloadLink, setDownloadLink] = useState('');
   const [lastRetentionCheck, setLastRetentionCheck] = useState(null);
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const token = localStorage.getItem('token');
+
+  // 관리자 권한 확인
+  useEffect(() => {
+    if (!user?.isAdmin) {
+      navigate('/devices');
+    }
+  }, [user, navigate]);
 
   const checkRetentionData = async () => {
     try {
@@ -21,12 +29,11 @@ function AdminPage() {
           setMessage('2년 초과 데이터가 존재합니다. 서버에서 자동으로 익스포트 및 삭제됩니다.');
           setLastRetentionCheck(true);
         } else if (lastRetentionCheck === true) {
-          // 자동 익스포트 완료 후 메시지 갱신
           const latestExport = await axios.get(`${apiUrl}/api/devices/history/exports`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           const recentExport = latestExport.data[0];
-          if (recentExport && new Date(recentExport.timestamp) > new Date(Date.now() - 10000)) { // 최근 10초 내 익스포트
+          if (recentExport && new Date(recentExport.timestamp) > new Date(Date.now() - 10000)) {
             setDownloadLink(`${apiUrl}${recentExport.filePath}`);
             setMessage('2년 초과 데이터가 자동으로 익스포트 및 삭제되었습니다. 아래 링크에서 다운로드하세요.');
           } else {
@@ -66,38 +73,69 @@ function AdminPage() {
     }
   };
 
+  const handleNavigate = (path) => () => navigate(path);
+
   useEffect(() => {
     checkRetentionData();
-    const interval = setInterval(checkRetentionData, 10000); // 10초 간격으로 체크
+    const interval = setInterval(checkRetentionData, 10000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, lastRetentionCheck]);
 
   return (
-    <div>
-      <h1>관리자 페이지</h1>
-      {message && (
-        <div style={{ backgroundColor: '#ffcccc', padding: '10px', marginBottom: '20px', borderRadius: '5px' }}>
-          <strong>알림:</strong> {message}
-        </div>
-      )}
-      {downloadLink && (
-        <div style={{ marginBottom: '20px' }}>
-          <a href={downloadLink} download style={{ color: '#2196F3', textDecoration: 'underline' }}>
-            익스포트된 파일 다운로드
-          </a>
-        </div>
-      )}
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={handleRetentionExport} style={{ marginRight: '10px', padding: '10px 20px' }}>
-          2년 초과 데이터 익스포트 (수동)
-        </button>
-        <Link to="/admin/users" style={{ marginRight: '10px' }}>사용자 목록</Link>
-        <Link to="/admin/pending" style={{ marginRight: '10px' }}>승인 대기 목록</Link>
-        <Link to="/devices/status" style={{ marginRight: '10px' }}>대여 현황</Link>
-        <Link to="/devices/history" style={{ marginRight: '10px' }}>대여 히스토리</Link>
-        <Link to="/devices/manage" style={{ marginRight: '10px' }}>디바이스 관리</Link>
-        <Link to="/admin/export-history" style={{ marginRight: '10px' }}>익스포트 내역 보기</Link>
-        <button onClick={logout}>로그아웃</button>
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto p-4 max-w-4xl">
+        <h2 className="text-2xl font-semibold text-gray-700 mb-4 text-center">관리자 페이지</h2>
+        {message && (
+          <div className={message === '2년 초과 데이터가 없습니다.' ? 'text-center mb-4' : 'bg-red-100 p-3 rounded-md mb-4 text-center'}>
+            <strong className={message === '2년 초과 데이터가 없습니다.' ? 'text-gray-700' : 'text-red-700'}>알림:</strong>{' '}
+            <span className={message === '2년 초과 데이터가 없습니다.' ? 'text-gray-700' : 'text-gray-700'}>{message}</span>
+          </div>
+        )}
+        {downloadLink && (
+          <div className="mb-4 text-center">
+            <a href={downloadLink} download className="text-blue-600 underline hover:text-blue-800">
+              익스포트된 파일 다운로드
+            </a>
+          </div>
+        )}
+        <table className="mx-auto border-collapse bg-white shadow-md rounded-lg">
+          <tbody>
+            <tr>
+              <td className="p-2">
+                <button
+                  onClick={handleRetentionExport}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full"
+                >
+                  2년 초과 데이터 익스포트 (수동)
+                </button>
+              </td>
+              <td className="p-2">
+                <button
+                  onClick={handleNavigate('/admin/users')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full"
+                >
+                  사용자 목록
+                </button>
+              </td>
+              <td className="p-2">
+                <button
+                  onClick={handleNavigate('/admin/pending')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full"
+                >
+                  승인 대기 목록
+                </button>
+              </td>
+              <td className="p-2">
+                <button
+                  onClick={handleNavigate('/admin/export-history')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full"
+                >
+                  익스포트 내역 보기
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );

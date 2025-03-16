@@ -6,7 +6,7 @@ function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  console.log('Navbar - Current user:', user); // 사용자 상태 확인
+  console.log('Navbar - Current user:', user);
 
   const handleLogout = () => {
     console.log('Navbar - Logging out user:', user);
@@ -17,10 +17,19 @@ function Navbar() {
   return (
     <nav style={{ backgroundColor: '#333', padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div style={{ display: 'flex', gap: '20px' }}>
-        <Link to="/devices" style={{ color: 'white', textDecoration: 'none' }}>대여하기</Link>
-        <Link to="/devices/status" style={{ color: 'white', textDecoration: 'none' }}>대여 현황</Link>
+        <Link to="/devices" style={{ color: 'white', textDecoration: 'none' }}>
+          대여하기
+        </Link>
+        <Link to="/devices/status" style={{ color: 'white', textDecoration: 'none' }}>
+          대여 현황
+        </Link>
+        <Link to="/devices/history" style={{ color: 'white', textDecoration: 'none' }}>
+          대여 히스토리
+        </Link>
         {user && user.isAdmin && (
-          <Link to="/admin" style={{ color: 'white', textDecoration: 'none' }}>Admin</Link>
+          <Link to="/admin" style={{ color: 'white', textDecoration: 'none' }}>
+            Admin
+          </Link>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -37,7 +46,9 @@ function Navbar() {
             Logout
           </button>
         ) : (
-          <Link to="/login" style={{ color: 'white', textDecoration: 'none' }}>Login</Link>
+          <Link to="/login" style={{ color: 'white', textDecoration: 'none' }}>
+            Login
+          </Link>
         )}
       </div>
     </nav>

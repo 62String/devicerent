@@ -251,8 +251,7 @@ function Devices() {
             {user.isAdmin && (
               <>
                 <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">관리자 페이지</button>
-                <button onClick={() => navigate('/devices/status')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">대여 현황</button>
-                <button onClick={() => navigate('/devices/history')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">대여 히스토리</button>
+                
                 <button onClick={() => navigate('/devices/manage')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">디바이스 관리</button>
               </>
             )}
