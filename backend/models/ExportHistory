@@ -1,4 +1,3 @@
-// models/ExportHistory.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -7,7 +6,8 @@ const ExportHistorySchema = new Schema({
   filePath: { type: String, required: true },
   recordCount: { type: Number, required: true },
   deletedCount: { type: Number, required: true },
-  performedBy: { type: String, default: 'system' } // system 또는 사용자 ID
+  performedBy: { type: String, default: 'system' }, // system 또는 사용자 ID
+  exportType: { type: String, required: true, enum: ['device', 'retention', 'history', 'backup'] } // 유형 추가
 }, { strict: true });
 
 module.exports = mongoose.model('ExportHistory', ExportHistorySchema);

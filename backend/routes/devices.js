@@ -14,7 +14,7 @@ const path = require('path');
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
 const DB_SIZE_LIMIT = 0.95; // 95% 임계점
-const EXPORT_DIR = path.resolve(__dirname, '../exports');
+const EXPORT_DIR = 'C:\\Users\\62String\\DeviceRentalApi\\backend\\exports\\Device-list';
 const apiUrl = process.env.API_URL || 'http://localhost:4000';
 
 if (!fs.existsSync(EXPORT_DIR)) {
@@ -40,6 +40,27 @@ const checkDbStatus = async () => {
     return { isOverLimit: true, canOperate: false };
   }
 };
+
+// 로그 기록용 엔드포인트
+router.post('/history/exports/log', adminAuth, async (req, res) => {
+  try {
+    const { action, filePath, timestamp, exportType } = req.body;
+    console.log(`[${new Date().toISOString()}] ${action} - File: ${filePath}`);
+    await ExportHistory.create({
+      timestamp: timestamp || new Date(),
+      filePath: filePath,
+      recordCount: 0,
+      deletedCount: 0,
+      performedBy: (await User.findOne({ id: jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET).id })).name || 'Unknown',
+      action: action,
+      exportType: exportType || 'unknown' // 유형 추가
+    });
+    res.status(200).json({ message: `${action} log recorded` });
+  } catch (error) {
+    console.error('Log error:', error);
+    res.status(500).json({ message: '로그 기록 실패' });
+  }
+});
 
 // 현재 대여 현황
 router.get('/status', async (req, res) => {
@@ -99,9 +120,8 @@ router.get('/history/check-retention', adminAuth, async (req, res) => {
 router.post('/history/export-retention', adminAuth, async (req, res) => {
   try {
     const decoded = jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET);
-    // 사용자 이름 조회
     const user = await User.findOne({ id: decoded.id });
-    const performedBy = user ? user.name || 'Unknown' : 'Unknown'; // 이름이 없으면 'Unknown'으로 설정
+    const performedBy = user ? user.name || 'Unknown' : 'Unknown';
     const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
     console.log('Exporting retention data with query:', query);
     const history = await RentalHistory.find(query).sort({ timestamp: -1 }).lean();
@@ -168,7 +188,9 @@ router.post('/history/export-retention', adminAuth, async (req, res) => {
       filePath: `/exports/${fileName}`,
       recordCount: history.length,
       deletedCount: deleteResult.deletedCount,
-      performedBy
+      performedBy,
+      action: 'export-retention',
+      exportType: 'retention' // 리텐션 유형 추가
     });
 
     res.status(200).json({ message: '2년 초과 데이터 익스포트 및 삭제 완료', filePath: `${apiUrl}/exports/${fileName}` });
@@ -233,7 +255,77 @@ router.post('/history/export', async (req, res) => {
 
     const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
 
-    res.setHeader('Content-Disposition', 'attachment; filename=history_export.xlsx');
+    // 서버 디렉토리에 저장
+    const dateTime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `history_export_${dateTime}.xlsx`;
+    const filePath = path.join(EXPORT_DIR, fileName);
+    try {
+      fs.writeFileSync(filePath, buffer);
+      console.log('History exported to:', filePath);
+    } catch (writeError) {
+      console.error('File write error:', writeError);
+      throw new Error('Failed to save export file');
+    }
+
+    // 로그 기록
+    console.log(`[${new Date().toISOString()}] export - File: ${filePath}`);
+    await ExportHistory.create({
+      timestamp: new Date(),
+      filePath: `/exports/${fileName}`,
+      recordCount: history.length,
+      deletedCount: 0,
+      performedBy: 'system',
+      action: 'export',
+      exportType: 'history' // 히스토리 유형 추가
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ message: '엑셀 내보내기 실패' });
+  }
+});
+
+// 디바이스 목록 익스포트
+router.post('/export', adminAuth, async (req, res) => {
+  try {
+    const devices = req.body;
+    console.log('Exporting devices:', devices);
+
+    const wb = xlsx.utils.book_new();
+    const ws = xlsx.utils.json_to_sheet(devices);
+    xlsx.utils.book_append_sheet(wb, ws, 'Devices');
+
+    const dateTime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `device_list_${dateTime}.xlsx`;
+    const filePath = path.join(EXPORT_DIR, fileName);
+    const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+    // 서버 디렉토리에 저장
+    try {
+      fs.writeFileSync(filePath, buffer);
+      console.log('Device list exported to:', filePath);
+    } catch (writeError) {
+      console.error('File write error:', writeError);
+      throw new Error('Failed to save export file');
+    }
+
+    // 로그 기록
+    console.log(`[${new Date().toISOString()}] export - File: ${filePath}`);
+    await ExportHistory.create({
+      timestamp: new Date(),
+      filePath: `/exports/${fileName}`,
+      recordCount: devices.length,
+      deletedCount: 0,
+      performedBy: (await User.findOne({ id: jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET).id })).name || 'Unknown',
+      action: 'export',
+      exportType: 'device' // 디바이스 유형 추가
+    });
+
+    // 파일 반환
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
   } catch (error) {
@@ -274,7 +366,7 @@ router.get('/history/exports/min-date', adminAuth, async (req, res) => {
   try {
     const oldestExport = await ExportHistory.findOne().sort({ timestamp: 1 }).lean();
     if (!oldestExport) {
-      return res.status(200).json({ minDate: '2020-01-01T00:00:00.000Z' }); // 기본값
+      return res.status(200).json({ minDate: '2020-01-01T00:00:00.000Z' });
     }
     res.status(200).json({ minDate: oldestExport.timestamp });
   } catch (error) {
@@ -373,11 +465,10 @@ router.post('/rent-device', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
 
-  // 용량 체크
   const dbStatus = await checkDbStatus();
   if (!dbStatus.canOperate) {
-    return res.status(503).json({ 
-      message: `데이터베이스 용량 95% 초과 (${dbStatus.size}MB / ${dbStatus.storageSize}MB). 관리자를 불러서 DB를 정리해 달라고 요청 후 다시 시도해주세요.` 
+    return res.status(503).json({
+      message: `데이터베이스 용량 95% 초과 (${dbStatus.size}MB / ${dbStatus.storageSize}MB). 관리자를 불러서 DB를 정리해 달라고 요청 후 다시 시도해주세요.`
     });
   }
 
@@ -429,11 +520,10 @@ router.post('/return-device', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
 
-  // 용량 체크
   const dbStatus = await checkDbStatus();
   if (!dbStatus.canOperate) {
-    return res.status(503).json({ 
-      message: `데이터베이스 용량 95% 초과 (${dbStatus.size}MB / ${dbStatus.storageSize}MB). 관리자를 불러서 DB를 정리해 달라고 요청 후 다시 시도해주세요.` 
+    return res.status(503).json({
+      message: `데이터베이스 용량 95% 초과 (${dbStatus.size}MB / ${dbStatus.storageSize}MB). 관리자를 불러서 DB를 정리해 달라고 요청 후 다시 시도해주세요.`
     });
   }
 

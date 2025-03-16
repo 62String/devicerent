@@ -5,7 +5,7 @@ const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('./utils/auth');
-const RentalHistory = require('./models/RentalHistory'); // 누락된 모델 추가
+const RentalHistory = require('./models/RentalHistory');
 const ExportHistory = require('./models/ExportHistory');
 const Device = require('./models/Device');
 const User = require('./models/User');
@@ -40,32 +40,102 @@ app.use('/api/admin', approveRoutes);
 app.use('/api/admin', usersRoutes);
 app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
-const excelFile = process.env.EXCEL_FILE_PATH || './device-data.xlsx';
-const initDevices = async (force = false) => {
+// 디렉토리 설정
+const EXPORT_DIR = 'C:\\Users\\62String\\DeviceRentalApi\\backend\\exports\\Device-list';
+
+if (!fs.existsSync(EXPORT_DIR)) {
+  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+  console.log('Created exports directory:', EXPORT_DIR);
+}
+
+const initDevices = async (force = false, exportPath = null) => {
   try {
     const count = await Device.countDocuments();
     console.log('Current device count:', count);
     if (count > 0 && !force) {
       console.log('Existing devices found, skipping full initialization. Checking for updates...');
-      return;
-    }
-    const indexes = await mongoose.connection.db.collection('devices').indexes();
-    if (indexes.some(index => index.name === 'id_1')) {
-      console.log('Dropping id_1 index...');
-      await mongoose.connection.db.collection('devices').dropIndex('id_1');
-      console.log('id_1 index dropped successfully.');
     }
     if (count > 0 && force) {
-      console.log('Forcing device initialization, deleting existing devices...');
+      console.log('Forcing device initialization, creating backup...');
+      const backupDate = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const backupFile = path.join(EXPORT_DIR, `backup_${backupDate}.xlsx`);
+      const devices = await Device.find();
+      const wb = xlsx.utils.book_new();
+      const ws = xlsx.utils.json_to_sheet(devices.map(d => ({
+        '시리얼 번호': d.serialNumber,
+        '디바이스 정보': d.deviceInfo || 'N/A',
+        '모델명': d.modelName || 'N/A',
+        'OS 이름': d.osName || 'N/A',
+        'OS 버전': d.osVersion || 'N/A',
+        '대여자': d.rentedBy ? `${d.rentedBy.name} (${d.rentedBy.affiliation || 'N/A'})` : '없음',
+        '대여일시': d.rentedAt ? new Date(d.rentedAt).toLocaleString() : '없음'
+      })));
+      xlsx.utils.book_append_sheet(wb, ws, 'Devices');
+      const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+      fs.writeFileSync(backupFile, buffer);
+      console.log('Backup created at:', backupFile);
       await Device.deleteMany({});
+
+      // 백업 로그 기록
+      await ExportHistory.create({
+        timestamp: new Date(),
+        filePath: `/exports/backup_${backupDate}.xlsx`,
+        recordCount: devices.length,
+        deletedCount: 0,
+        performedBy: 'system',
+        action: 'export',
+        exportType: 'backup' // 백업 유형 추가
+      });
     }
-    const workbook = xlsx.readFile(excelFile);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawDevices = xlsx.utils.sheet_to_json(sheet);
+
+    let workbook, sheet, rawDevices, importFilePath;
+    if (exportPath && fs.existsSync(exportPath)) {
+      console.log('Using provided export path:', exportPath);
+      workbook = xlsx.readFile(exportPath);
+      importFilePath = exportPath;
+    } else {
+      const files = fs.readdirSync(EXPORT_DIR).filter(file => file.endsWith('.xlsx'));
+      if (files.length === 0) {
+        console.log('Warning: No Excel files found in directory:', EXPORT_DIR);
+        console.log('Available files:', fs.readdirSync(EXPORT_DIR));
+        return;
+      }
+
+      let selectedFile = null;
+      for (const file of files.sort((a, b) => {
+        const aTime = fs.statSync(path.join(EXPORT_DIR, a)).mtime.getTime();
+        const bTime = fs.statSync(path.join(EXPORT_DIR, b)).mtime.getTime();
+        return bTime - aTime;
+      })) {
+        const tempPath = path.join(EXPORT_DIR, file);
+        const tempWorkbook = xlsx.readFile(tempPath);
+        const tempSheet = tempWorkbook.Sheets[tempWorkbook.SheetNames[0]];
+        const tempRawDevices = xlsx.utils.sheet_to_json(tempSheet);
+        if (tempRawDevices && tempRawDevices.length > 0) {
+          selectedFile = file;
+          break;
+        }
+        console.log(`Skipping empty Excel file: ${tempPath}`);
+      }
+
+      if (!selectedFile) {
+        console.log('Error: No Excel files with data found in directory:', EXPORT_DIR);
+        console.log('Available files:', files);
+        return;
+      }
+
+      importFilePath = path.join(EXPORT_DIR, selectedFile);
+      console.log('Using latest non-empty Excel file:', importFilePath);
+      workbook = xlsx.readFile(importFilePath);
+    }
+
+    sheet = workbook.Sheets[workbook.SheetNames[0]];
+    rawDevices = xlsx.utils.sheet_to_json(sheet);
     if (!rawDevices || rawDevices.length === 0) {
-      console.log('No devices found in Excel file');
+      console.log('No devices found in Excel file:', importFilePath);
       return;
     }
+
     const devicesToInsert = [];
     const devicesToUpdate = [];
     const invalidDevices = [];
@@ -74,24 +144,37 @@ const initDevices = async (force = false) => {
 
     rawDevices.forEach((device, index) => {
       console.log(`Processing device at index ${index}:`, device);
-      if (!device.SerialNumber || !device.DeviceInfo || !device.OSName) {
+      if (!device['시리얼 번호'] || !device['OS 이름']) {
         invalidDevices.push({ index, device });
-      } else {
-        const newDevice = {
-          serialNumber: device.SerialNumber,
-          deviceInfo: device.DeviceInfo,
-          osName: device.OSName,
-          osVersion: device.OSVersion || '',
-          modelName: device.ModelName || '',
-          status: 'active',
-          rentedBy: null,
-          rentedAt: null,
-        };
-        if (existingSerials.has(device.SerialNumber)) {
-          devicesToUpdate.push(newDevice);
-        } else {
-          devicesToInsert.push(newDevice);
+        return;
+      }
+
+      // 대여일시 파싱 개선
+      let rentedAt = null;
+      if (device['대여일시'] && device['대여일시'] !== '없음') {
+        const dateStr = device['대여일시'].replace('오후', 'PM').replace('오전', 'AM');
+        rentedAt = new Date(dateStr);
+        if (isNaN(rentedAt.getTime())) {
+          console.log(`Warning: Invalid date format at index ${index}: ${device['대여일시']}, setting to null but proceeding`);
+          rentedAt = null; // 무효한 날짜라도 디바이스 제외하지 않음
         }
+      }
+
+      const newDevice = {
+        serialNumber: device['시리얼 번호'],
+        deviceInfo: device['디바이스 정보'] || device['모델명'] || 'N/A',
+        osName: device['OS 이름'],
+        osVersion: device['OS 버전'] || '',
+        modelName: device['모델명'] || '',
+        status: 'active',
+        rentedBy: device['대여자'] && device['대여자'] !== '없음' ? { name: device['대여자'].split(' (')[0], affiliation: device['대여자'].split(' (')[1]?.replace(')', '') || '' } : null,
+        rentedAt: rentedAt, // null 허용
+      };
+
+      if (existingSerials.has(device['시리얼 번호'])) {
+        devicesToUpdate.push(newDevice);
+      } else {
+        devicesToInsert.push(newDevice);
       }
     });
 
@@ -104,18 +187,35 @@ const initDevices = async (force = false) => {
     }
 
     let result;
-    if (devicesToInsert.length > 0) {
-      result = await Device.insertMany(devicesToInsert, { ordered: false });
-      console.log('New devices inserted:', result ? result.insertedCount : 0);
-      console.log('Inserted devices:', result ? result.insertedIds : {});
-    }
-    if (devicesToUpdate.length > 0) {
-      for (const device of devicesToUpdate) {
-        await Device.updateOne({ serialNumber: device.serialNumber }, { $set: device }, { upsert: false });
+    try {
+      if (devicesToInsert.length > 0) {
+        result = await Device.insertMany(devicesToInsert, { ordered: false });
+        console.log('New devices inserted:', result ? result.length : 0);
+        console.log('Inserted devices:', result ? result.map(d => d.serialNumber) : []);
       }
-      console.log('Existing devices updated:', devicesToUpdate.length);
+      if (devicesToUpdate.length > 0) {
+        for (const device of devicesToUpdate) {
+          await Device.updateOne({ serialNumber: device.serialNumber }, { $set: device }, { upsert: false });
+        }
+        console.log('Existing devices updated:', devicesToUpdate.length);
+      }
+    } catch (insertError) {
+      console.error('Error during insert/update:', insertError);
+      throw insertError;
     }
     console.log('Total devices processed:', devicesToInsert.length + devicesToUpdate.length);
+
+    // 초기화 로그 기록
+    console.log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);
+    await ExportHistory.create({
+      timestamp: new Date(),
+      filePath: `/exports/${path.basename(importFilePath)}`,
+      recordCount: rawDevices.length,
+      deletedCount: 0,
+      performedBy: 'system',
+      action: 'import',
+      exportType: 'device' // 디바이스 초기화 유형 추가
+    });
   } catch (error) {
     console.error('Error initializing devices:', error.message, error.stack);
     if (error.writeErrors) {
@@ -128,7 +228,7 @@ const initDevices = async (force = false) => {
   }
 };
 
-// 디바이스 초기화 API 추가
+// 디바이스 초기화 API
 app.post('/api/admin/init-devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -137,8 +237,8 @@ app.post('/api/admin/init-devices', async (req, res) => {
     const user = await User.findOne({ id: decoded.id, isAdmin: true });
     if (!user) return res.status(403).json({ message: 'Admin access required' });
 
-    const { force } = req.body;
-    await initDevices(force);
+    const { force, exportPath } = req.body;
+    await initDevices(force, exportPath);
     res.json({ message: 'Device initialization completed', force });
   } catch (error) {
     console.error('Device initialization error:', error);
@@ -147,15 +247,14 @@ app.post('/api/admin/init-devices', async (req, res) => {
 });
 
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
-const EXPORT_DIR = path.resolve(__dirname, 'exports');
+const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 
-if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-  console.log('Created exports directory:', EXPORT_DIR);
+if (!fs.existsSync(EXPORT_DIR_SERVER)) {
+  fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
+  console.log('Created exports directory:', EXPORT_DIR_SERVER);
 }
 
 // 2년 초과 데이터 익스포트 및 삭제 로직
-
 const exportRetentionData = async () => {
   try {
     const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
@@ -195,7 +294,7 @@ const exportRetentionData = async () => {
     }
 
     const fileName = `retention_export_${new Date().toISOString().replace(/[:]/g, '-')}.xlsx`;
-    const filePath = path.join(EXPORT_DIR, fileName);
+    const filePath = path.join(EXPORT_DIR_SERVER, fileName);
     const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
 
     try {
@@ -227,7 +326,9 @@ const exportRetentionData = async () => {
       filePath: `/exports/${fileName}`,
       recordCount: history.length,
       deletedCount: deleteResult.deletedCount,
-      performedBy: 'system' // 자동 실행 시 system으로 설정
+      performedBy: 'system',
+      action: 'export-retention',
+      exportType: 'retention' // 리텐션 유형 추가
     });
   } catch (error) {
     console.error('Retention export error:', {
@@ -238,15 +339,21 @@ const exportRetentionData = async () => {
     });
   }
 };
+
 const PORT = process.env.PORT || 4000;
 
 mongoose
   .connect('mongodb://localhost:27017/devicerent')
   .then(async () => {
     console.log('MongoDB connected');
-    // 초기화는 API 호출로만 실행
-    console.log('Device initialization skipped. Use /api/admin/init-devices to initialize devices.');
-    await exportRetentionData(); // 서버 시작 시 즉시 체크
+    const deviceCount = await Device.countDocuments();
+    if (deviceCount === 0) {
+      console.log('No devices found, initializing from Excel directory...');
+      await initDevices(false);
+    } else {
+      console.log('Devices found, skipping directory initialization.');
+    }
+    await exportRetentionData();
     setInterval(() => {
       console.log('Checking retention data at:', new Date().toISOString());
       exportRetentionData().catch(err => console.error('Interval execution error:', err));
