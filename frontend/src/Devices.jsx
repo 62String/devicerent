@@ -243,11 +243,11 @@ function Devices() {
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-blue-900 text-white p-4">
-        <h1 className="text-3xl font-bold">Device Rental System</h1>
+      <h1 className="text-3xl font-bold text-center">Device Rental System</h1>
       </header>
       <div className="container mx-auto p-4 max-w-4xl">
         {user && (
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-6 flex flex-wrap gap-2 justify-center">
             {user.isAdmin && (
               <>
                 <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">관리자 페이지</button>
@@ -258,8 +258,8 @@ function Devices() {
             )}
           </div>
         )}
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">디바이스 목록</h2>
-        <div className="mb-6 flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-md">
+        <h2 className="text-2xl font-semibold text-gray-700 mb-4 text-center">디바이스 목록</h2>
+        <div className="mb-6 flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-md justify-center">
           <input
             type="text"
             value={searchSerial}
@@ -295,12 +295,12 @@ function Devices() {
           </button>
         </div>
         {loading ? (
-          <p className="text-gray-600">디바이스 목록을 불러오는 중...</p>
+          <p className="text-gray-600 text-center">디바이스 목록을 불러오는 중...</p>
         ) : error ? (
-          <p className="text-red-500 font-bold">{error}</p>
+          <p className="text-red-500 font-bold text-center">{error}</p>
         ) : filteredDevices.length > 0 ? (
-          <div className="overflow-x-auto"> {/* 가로 스크롤 가능 */}
-            <table className="min-w-[1024px] border-collapse bg-white shadow-md rounded-lg">
+          <div className="overflow-x-auto mx-auto max-w-[1024px]">
+            <table className="w-full border-collapse bg-white shadow-md rounded-lg">
               <thead>
                 <tr className="bg-blue-50">
                   <th className="border border-gray-200 p-3 text-left font-medium text-gray-700">시리얼 번호</th>
@@ -355,7 +355,7 @@ function Devices() {
             </table>
           </div>
         ) : (
-          <p className="text-gray-600">디바이스 목록이 없습니다.</p>
+          <p className="text-gray-600 text-center">디바이스 목록이 없습니다.</p>
         )}
         {showConfirmModal && (
           <div style={{
