@@ -41,11 +41,15 @@ app.use('/api/admin', usersRoutes);
 app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
 // 디렉토리 설정
-const EXPORT_DIR = 'C:\\Users\\62String\\DeviceRentalApi\\backend\\exports\\Device-list';
+const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'Device-list');
 
 if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-  console.log('Created exports directory:', EXPORT_DIR);
+  try {
+    fs.mkdirSync(EXPORT_DIR, { recursive: true });
+    console.log('Created exports directory:', EXPORT_DIR);
+  } catch (err) {
+    console.error('Failed to create exports directory:', err);
+  }
 }
 
 const initDevices = async (force = false, exportPath = null) => {
@@ -250,8 +254,12 @@ const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
 const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 
 if (!fs.existsSync(EXPORT_DIR_SERVER)) {
-  fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
-  console.log('Created exports directory:', EXPORT_DIR_SERVER);
+  try {
+    fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
+    console.log('Created exports directory:', EXPORT_DIR_SERVER);
+  } catch (err) {
+    console.error('Failed to create exports directory:', err);
+  }
 }
 
 // 2년 초과 데이터 익스포트 및 삭제 로직
@@ -406,8 +414,6 @@ app.get('/api/me', async (req, res) => {
     res.status(401).json({ message: 'Invalid token' });
   }
 });
-
-
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

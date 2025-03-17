@@ -14,12 +14,16 @@ const path = require('path');
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
 const DB_SIZE_LIMIT = 0.95; // 95% 임계점
-const EXPORT_DIR = 'C:\\Users\\62String\\DeviceRentalApi\\backend\\exports\\Device-list';
+const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, '..', 'exports', 'Device-list');
 const apiUrl = process.env.API_URL || 'http://localhost:4000';
 
 if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-  console.log('Created exports directory:', EXPORT_DIR);
+  try {
+    fs.mkdirSync(EXPORT_DIR, { recursive: true });
+    console.log('Created exports directory in routes/devices:', EXPORT_DIR);
+  } catch (err) {
+    console.error('Failed to create exports directory in routes/devices:', err);
+  }
 }
 
 // 데이터베이스 용량 체크
