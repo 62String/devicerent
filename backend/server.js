@@ -473,7 +473,11 @@ let serverConnection;
 
 if (process.env.NODE_ENV !== 'test') {
   serverConnection = mongoose
-    .connect('mongodb://localhost:27017/devicerent')
+    .connect('mongodb://localhost:27017/devicerent', {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 60000
+    })
     .then(async () => {
       console.log('MongoDB connected');
       const deviceCount = await Device.countDocuments();

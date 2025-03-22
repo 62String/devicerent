@@ -54,9 +54,11 @@ describe('POST /api/admin/clear-invalid-devices (Integration)', () => {
   it('should clear invalid devices and re-sync', async () => {
     const DeviceModel = testConnection.model('Device', Device.schema);
     await DeviceModel.create({
+      serialNumber: 'INVALID_DEVICE', // 필수 필드 추가
+      deviceInfo: 'Invalid Device',   // 필수 필드 추가
       osName: 'AOS'
     });
-
+  
     const exportPath = path.join(__dirname, 'test.xlsx');
     const wb = xlsx.utils.book_new();
     const ws = xlsx.utils.json_to_sheet([
@@ -64,19 +66,19 @@ describe('POST /api/admin/clear-invalid-devices (Integration)', () => {
     ]);
     xlsx.utils.book_append_sheet(wb, ws, 'Devices');
     xlsx.writeFile(wb, exportPath);
-
+  
     const res = await request(app)
       .post('/api/admin/clear-invalid-devices')
       .set('Authorization', `Bearer ${token}`)
       .send({ exportPath });
-
+  
     expect(res.status).toBe(200);
     expect(res.body.message).toBe('Invalid devices cleared and re-synced successfully');
-
+  
     const devices = await DeviceModel.find();
     expect(devices.length).toBe(1);
     expect(devices[0].serialNumber).toBe('TEST001');
-
+  
     fs.unlinkSync(exportPath);
   });
 });

@@ -10,12 +10,10 @@ describe('initDevices (Integration)', () => {
 
   beforeAll(async () => {
     testConnection = mongoose.createConnection('mongodb://localhost:27017/devicerent-test', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 60000,
-      connectTimeoutMS: 60000
-    });
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 60000
+      });
     const DeviceModel = testConnection.model('Device', Device.schema);
     await DeviceModel.deleteMany({});
   }, 60000);
