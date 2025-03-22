@@ -54,16 +54,47 @@ if (!fs.existsSync(EXPORT_DIR)) {
 
 const initDevices = async (force = false, exportPath = null) => {
   try {
-    const count = await Device.countDocuments();
-    console.log('Current device count:', count);
-    if (count > 0 && !force) {
-      console.log('Existing devices found, skipping full initialization. Checking for updates...');
+    // 1. 잘못된 데이터 체크
+    const devices = await Device.find();
+    const invalidDevices = [];
+    const serialNumbers = new Set();
+
+    devices.forEach((device, index) => {
+      const issues = [];
+      // 필수 필드 체크
+      if (!device.serialNumber) issues.push('Missing serialNumber');
+      if (!device.osName) issues.push('Missing osName');
+      // 형식 체크
+      if (device.rentedAt && isNaN(new Date(device.rentedAt).getTime())) issues.push('Invalid rentedAt');
+      // 중복 체크
+      if (serialNumbers.has(device.serialNumber)) issues.push('Duplicate serialNumber');
+      else serialNumbers.add(device.serialNumber);
+      // 과거 필드 체크 (location)
+      if (device.location !== undefined) issues.push('Deprecated location field found');
+
+      if (issues.length > 0) {
+        invalidDevices.push({
+          index,
+          serialNumber: device.serialNumber || 'N/A',
+          issues
+        });
+      }
+    });
+
+    // 잘못된 데이터가 있으면 예외 던지기
+    if (invalidDevices.length > 0) {
+      console.log('Invalid devices found:', invalidDevices);
+      throw new Error(JSON.stringify({
+        message: 'Invalid devices found',
+        invalidDevices
+      }));
     }
-    if (count > 0 && force) {
-      console.log('Forcing device initialization, creating backup...');
+
+    // 2. 기존 데이터 백업 (항상 백업 후 삭제는 별도 API에서 처리)
+    if (devices.length > 0) {
+      console.log('Existing devices found, creating backup...');
       const backupDate = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const backupFile = path.join(EXPORT_DIR, `backup_${backupDate}.xlsx`);
-      const devices = await Device.find();
       const wb = xlsx.utils.book_new();
       const ws = xlsx.utils.json_to_sheet(devices.map(d => ({
         '시리얼 번호': d.serialNumber,
@@ -78,20 +109,10 @@ const initDevices = async (force = false, exportPath = null) => {
       const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
       fs.writeFileSync(backupFile, buffer);
       console.log('Backup created at:', backupFile);
-      await Device.deleteMany({});
-
-      // 백업 로그 기록
-      await ExportHistory.create({
-        timestamp: new Date(),
-        filePath: `/exports/backup_${backupDate}.xlsx`,
-        recordCount: devices.length,
-        deletedCount: 0,
-        performedBy: 'system',
-        action: 'export',
-        exportType: 'backup' // 백업 유형 추가
-      });
+      // 삭제는 별도 API에서 처리하므로 여기서 삭제 로직 제거
     }
 
+    // 3. 신규 데이터 임포트
     let workbook, sheet, rawDevices, importFilePath;
     if (exportPath && fs.existsSync(exportPath)) {
       console.log('Using provided export path:', exportPath);
@@ -141,26 +162,35 @@ const initDevices = async (force = false, exportPath = null) => {
     }
 
     const devicesToInsert = [];
-    const devicesToUpdate = [];
-    const invalidDevices = [];
-    const existingDevices = await Device.find({}, 'serialNumber');
-    const existingSerials = new Set(existingDevices.map(d => d.serialNumber));
+    const invalidNewDevices = [];
+    const newSerialNumbers = new Set();
 
     rawDevices.forEach((device, index) => {
       console.log(`Processing device at index ${index}:`, device);
-      if (!device['시리얼 번호'] || !device['OS 이름']) {
-        invalidDevices.push({ index, device });
+      const issues = [];
+      if (!device['시리얼 번호']) issues.push('Missing serialNumber');
+      if (!device['OS 이름']) issues.push('Missing osName');
+      if (device['대여일시'] && device['대여일시'] !== '없음') {
+        const dateStr = device['대여일시'].replace('오후', 'PM').replace('오전', 'AM');
+        if (isNaN(new Date(dateStr).getTime())) {
+          issues.push('Invalid rentedAt');
+        }
+      }
+      if (newSerialNumbers.has(device['시리얼 번호'])) issues.push('Duplicate serialNumber');
+      else newSerialNumbers.add(device['시리얼 번호']);
+      if (device['location'] !== undefined) issues.push('Deprecated location field found');
+
+      if (issues.length > 0) {
+        invalidNewDevices.push({ index, serialNumber: device['시리얼 번호'] || 'N/A', issues });
         return;
       }
 
-      // 대여일시 파싱 개선
       let rentedAt = null;
       if (device['대여일시'] && device['대여일시'] !== '없음') {
         const dateStr = device['대여일시'].replace('오후', 'PM').replace('오전', 'AM');
         rentedAt = new Date(dateStr);
         if (isNaN(rentedAt.getTime())) {
-          console.log(`Warning: Invalid date format at index ${index}: ${device['대여일시']}, setting to null but proceeding`);
-          rentedAt = null; // 무효한 날짜라도 디바이스 제외하지 않음
+          rentedAt = null;
         }
       }
 
@@ -172,42 +202,30 @@ const initDevices = async (force = false, exportPath = null) => {
         modelName: device['모델명'] || '',
         status: 'active',
         rentedBy: device['대여자'] && device['대여자'] !== '없음' ? { name: device['대여자'].split(' (')[0], affiliation: device['대여자'].split(' (')[1]?.replace(')', '') || '' } : null,
-        rentedAt: rentedAt, // null 허용
+        rentedAt: rentedAt,
       };
 
-      if (existingSerials.has(device['시리얼 번호'])) {
-        devicesToUpdate.push(newDevice);
-      } else {
-        devicesToInsert.push(newDevice);
-      }
+      devicesToInsert.push(newDevice);
     });
 
-    if (invalidDevices.length > 0) {
-      console.log('Invalid devices skipped:', invalidDevices);
+    if (invalidNewDevices.length > 0) {
+      console.log('Invalid new devices skipped:', invalidNewDevices);
     }
-    if (devicesToInsert.length === 0 && devicesToUpdate.length === 0) {
-      console.log('No valid devices to insert or update');
+    if (devicesToInsert.length === 0) {
+      console.log('No valid devices to insert');
       return;
     }
 
     let result;
     try {
-      if (devicesToInsert.length > 0) {
-        result = await Device.insertMany(devicesToInsert, { ordered: false });
-        console.log('New devices inserted:', result ? result.length : 0);
-        console.log('Inserted devices:', result ? result.map(d => d.serialNumber) : []);
-      }
-      if (devicesToUpdate.length > 0) {
-        for (const device of devicesToUpdate) {
-          await Device.updateOne({ serialNumber: device.serialNumber }, { $set: device }, { upsert: false });
-        }
-        console.log('Existing devices updated:', devicesToUpdate.length);
-      }
+      result = await Device.insertMany(devicesToInsert, { ordered: false });
+      console.log('New devices inserted:', result ? result.length : 0);
+      console.log('Inserted devices:', result ? result.map(d => d.serialNumber) : []);
     } catch (insertError) {
-      console.error('Error during insert/update:', insertError);
+      console.error('Error during insert:', insertError);
       throw insertError;
     }
-    console.log('Total devices processed:', devicesToInsert.length + devicesToUpdate.length);
+    console.log('Total devices processed:', devicesToInsert.length);
 
     // 초기화 로그 기록
     console.log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);
@@ -218,9 +236,12 @@ const initDevices = async (force = false, exportPath = null) => {
       deletedCount: 0,
       performedBy: 'system',
       action: 'import',
-      exportType: 'device' // 디바이스 초기화 유형 추가
+      exportType: 'device'
     });
   } catch (error) {
+    if (error.message.includes('Invalid devices found')) {
+      throw error; // 프론트엔드에서 처리하도록 예외 전달
+    }
     console.error('Error initializing devices:', error.message, error.stack);
     if (error.writeErrors) {
       console.error('Write errors:', error.writeErrors.map(e => ({
@@ -229,6 +250,7 @@ const initDevices = async (force = false, exportPath = null) => {
         op: e.err.op
       })));
     }
+    throw error;
   }
 };
 
@@ -241,11 +263,105 @@ app.post('/api/admin/init-devices', async (req, res) => {
     const user = await User.findOne({ id: decoded.id, isAdmin: true });
     if (!user) return res.status(403).json({ message: 'Admin access required' });
 
-    const { force, exportPath } = req.body;
-    await initDevices(force, exportPath);
-    res.json({ message: 'Device initialization completed', force });
+    const { exportPath } = req.body;
+    await initDevices(false, exportPath);
+    res.json({ message: 'Device initialization completed' });
   } catch (error) {
     console.error('Device initialization error:', error);
+    if (error.message.includes('Invalid devices found')) {
+      res.status(400).json(JSON.parse(error.message));
+    } else {
+      res.status(500).json({ message: 'Server error', error: error.message });
+    }
+  }
+});
+
+// 잘못된 디바이스 삭제 및 재동기화 API
+app.post('/api/admin/clear-invalid-devices', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token provided' });
+  try {
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    const user = await User.findOne({ id: decoded.id, isAdmin: true });
+    if (!user) return res.status(403).json({ message: 'Admin access required' });
+
+    const { exportPath } = req.body;
+    const devices = await Device.find();
+    const invalidDevices = [];
+    const serialNumbers = new Set();
+
+    devices.forEach((device, index) => {
+      const issues = [];
+      if (!device.serialNumber) issues.push('Missing serialNumber');
+      if (!device.osName) issues.push('Missing osName');
+      if (device.rentedAt && isNaN(new Date(device.rentedAt).getTime())) issues.push('Invalid rentedAt');
+      if (serialNumbers.has(device.serialNumber)) issues.push('Duplicate serialNumber');
+      else serialNumbers.add(device.serialNumber);
+      if (device.location !== undefined) issues.push('Deprecated location field found');
+
+      if (issues.length > 0) {
+        invalidDevices.push({
+          index,
+          serialNumber: device.serialNumber || 'N/A',
+          issues
+        });
+      }
+    });
+
+    if (invalidDevices.length === 0) {
+      return res.status(200).json({ message: 'No invalid devices found, proceeding with import' });
+    }
+
+    console.log('Deleting invalid devices:', invalidDevices);
+    await Device.deleteMany({ serialNumber: { $in: invalidDevices.map(d => d.serialNumber) } });
+    console.log('Invalid devices deleted');
+
+    // 재동기화
+    await initDevices(false, exportPath);
+    res.json({ message: 'Invalid devices cleared and re-synced successfully' });
+  } catch (error) {
+    console.error('Clear invalid devices error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// 데이터 무결성 검증 API
+app.get('/api/admin/verify-data-integrity', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token provided' });
+  try {
+    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    const user = await User.findOne({ id: decoded.id, isAdmin: true });
+    if (!user) return res.status(403).json({ message: 'Admin access required' });
+
+    const devices = await Device.find();
+    const issues = [];
+    const serialNumbers = new Set();
+
+    devices.forEach((device, index) => {
+      const deviceIssues = [];
+      if (!device.serialNumber) deviceIssues.push('Missing serialNumber');
+      if (!device.osName) deviceIssues.push('Missing osName');
+      if (device.rentedAt && isNaN(new Date(device.rentedAt).getTime())) deviceIssues.push('Invalid rentedAt');
+      if (serialNumbers.has(device.serialNumber)) deviceIssues.push('Duplicate serialNumber');
+      else serialNumbers.add(device.serialNumber);
+      if (device.location !== undefined) deviceIssues.push('Deprecated location field found');
+
+      if (deviceIssues.length > 0) {
+        issues.push({
+          serialNumber: device.serialNumber || 'N/A',
+          issues: deviceIssues
+        });
+      }
+    });
+
+    if (issues.length > 0) {
+      res.status(200).json({ message: 'Data integrity issues found', issues });
+    } else {
+      res.status(200).json({ message: 'Data integrity check passed, no issues found' });
+    }
+  } catch (error) {
+    console.error('Data integrity check error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
