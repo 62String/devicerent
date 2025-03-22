@@ -1,0 +1,10 @@
+{
+    "source": {
+        "include": ["tests"],
+        "includePattern": ".+\\.test\\.js$"
+    },
+    "opts": {
+        "destination": "docs/tests/jsdoc",
+        "recurse":true
+    }
+}

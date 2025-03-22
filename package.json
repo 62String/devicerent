@@ -7,6 +7,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.14",
     "autoprefixer": "^10.4.21",
+    "mongodb-memory-server": "^10.1.4",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.14"
   }

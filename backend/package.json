@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage",
+    "test:server": "jest tests/server/",
+    "test:models": "jest tests/models",
+    "test:routes": "jest tests/routes",
+    "test:utils": "jest tests/utils",
+    "docs": "jsdoc -c jsdoc.json"
   },
   "keywords": [],
   "author": "",
@@ -18,5 +23,24 @@
     "mongoose": "^8.11.0",
     "nodemon": "^3.1.9",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@jest/reporters": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-allure2-reporter": "^2.0.0",
+    "jsdoc": "^4.0.4",
+    "mongodb-memory-server": "^10.1.4",
+    "supertest": "^7.1.0"
+  },
+  "jest": {
+    "reporters": [
+      "default",
+      [
+        "jest-allure2-reporter",
+        {
+          "outputDir": "allure-results"
+        }
+      ]
+    ]
   }
 }

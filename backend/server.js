@@ -28,7 +28,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 로그 미들웨어 추가
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -40,7 +39,6 @@ app.use('/api/admin', approveRoutes);
 app.use('/api/admin', usersRoutes);
 app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
-// 디렉토리 설정
 const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'Device-list');
 
 if (!fs.existsSync(EXPORT_DIR)) {
@@ -54,22 +52,17 @@ if (!fs.existsSync(EXPORT_DIR)) {
 
 const initDevices = async (force = false, exportPath = null) => {
   try {
-    // 1. 잘못된 데이터 체크
     const devices = await Device.find();
     const invalidDevices = [];
     const serialNumbers = new Set();
 
     devices.forEach((device, index) => {
       const issues = [];
-      // 필수 필드 체크
       if (!device.serialNumber) issues.push('Missing serialNumber');
       if (!device.osName) issues.push('Missing osName');
-      // 형식 체크
       if (device.rentedAt && isNaN(new Date(device.rentedAt).getTime())) issues.push('Invalid rentedAt');
-      // 중복 체크
       if (serialNumbers.has(device.serialNumber)) issues.push('Duplicate serialNumber');
       else serialNumbers.add(device.serialNumber);
-      // 과거 필드 체크 (location)
       if (device.location !== undefined) issues.push('Deprecated location field found');
 
       if (issues.length > 0) {
@@ -81,7 +74,6 @@ const initDevices = async (force = false, exportPath = null) => {
       }
     });
 
-    // 잘못된 데이터가 있으면 예외 던지기
     if (invalidDevices.length > 0) {
       console.log('Invalid devices found:', invalidDevices);
       throw new Error(JSON.stringify({
@@ -90,7 +82,6 @@ const initDevices = async (force = false, exportPath = null) => {
       }));
     }
 
-    // 2. 기존 데이터 백업 (항상 백업 후 삭제는 별도 API에서 처리)
     if (devices.length > 0) {
       console.log('Existing devices found, creating backup...');
       const backupDate = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -109,10 +100,8 @@ const initDevices = async (force = false, exportPath = null) => {
       const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
       fs.writeFileSync(backupFile, buffer);
       console.log('Backup created at:', backupFile);
-      // 삭제는 별도 API에서 처리하므로 여기서 삭제 로직 제거
     }
 
-    // 3. 신규 데이터 임포트
     let workbook, sheet, rawDevices, importFilePath;
     if (exportPath && fs.existsSync(exportPath)) {
       console.log('Using provided export path:', exportPath);
@@ -227,8 +216,16 @@ const initDevices = async (force = false, exportPath = null) => {
     }
     console.log('Total devices processed:', devicesToInsert.length);
 
-    // 초기화 로그 기록
     console.log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);
+    console.log('Creating ExportHistory (initDevices):', {
+      timestamp: new Date(),
+      filePath: `/exports/${path.basename(importFilePath)}`,
+      recordCount: rawDevices.length,
+      deletedCount: 0,
+      performedBy: 'system',
+      action: 'import',
+      exportType: 'device'
+    });
     await ExportHistory.create({
       timestamp: new Date(),
       filePath: `/exports/${path.basename(importFilePath)}`,
@@ -238,9 +235,11 @@ const initDevices = async (force = false, exportPath = null) => {
       action: 'import',
       exportType: 'device'
     });
+
+    return result;
   } catch (error) {
     if (error.message.includes('Invalid devices found')) {
-      throw error; // 프론트엔드에서 처리하도록 예외 전달
+      throw error;
     }
     console.error('Error initializing devices:', error.message, error.stack);
     if (error.writeErrors) {
@@ -254,7 +253,6 @@ const initDevices = async (force = false, exportPath = null) => {
   }
 };
 
-// 디바이스 초기화 API
 app.post('/api/admin/init-devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -276,7 +274,6 @@ app.post('/api/admin/init-devices', async (req, res) => {
   }
 });
 
-// 잘못된 디바이스 삭제 및 재동기화 API
 app.post('/api/admin/clear-invalid-devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -316,7 +313,6 @@ app.post('/api/admin/clear-invalid-devices', async (req, res) => {
     await Device.deleteMany({ serialNumber: { $in: invalidDevices.map(d => d.serialNumber) } });
     console.log('Invalid devices deleted');
 
-    // 재동기화
     await initDevices(false, exportPath);
     res.json({ message: 'Invalid devices cleared and re-synced successfully' });
   } catch (error) {
@@ -325,7 +321,6 @@ app.post('/api/admin/clear-invalid-devices', async (req, res) => {
   }
 });
 
-// 데이터 무결성 검증 API
 app.get('/api/admin/verify-data-integrity', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -366,7 +361,7 @@ app.get('/api/admin/verify-data-integrity', async (req, res) => {
   }
 });
 
-const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
+const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2;
 const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 
 if (!fs.existsSync(EXPORT_DIR_SERVER)) {
@@ -378,7 +373,6 @@ if (!fs.existsSync(EXPORT_DIR_SERVER)) {
   }
 }
 
-// 2년 초과 데이터 익스포트 및 삭제 로직
 const exportRetentionData = async () => {
   try {
     const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
@@ -444,7 +438,15 @@ const exportRetentionData = async () => {
     );
     console.log('Updated devices with expired rentals');
 
-    // 익스포트 로그 저장
+    console.log('Creating ExportHistory (retention):', {
+      timestamp: new Date(),
+      filePath: `/exports/${fileName}`,
+      recordCount: history.length,
+      deletedCount: deleteResult.deletedCount,
+      performedBy: 'system',
+      action: 'export-retention',
+      exportType: 'retention'
+    });
     await ExportHistory.create({
       timestamp: new Date(),
       filePath: `/exports/${fileName}`,
@@ -452,7 +454,7 @@ const exportRetentionData = async () => {
       deletedCount: deleteResult.deletedCount,
       performedBy: 'system',
       action: 'export-retention',
-      exportType: 'retention' // 리텐션 유형 추가
+      exportType: 'retention'
     });
   } catch (error) {
     console.error('Retention export error:', {
@@ -465,25 +467,64 @@ const exportRetentionData = async () => {
 };
 
 const PORT = process.env.PORT || 4000;
+// server.js 하단
+let interval;
+let serverConnection;
 
-mongoose
-  .connect('mongodb://localhost:27017/devicerent')
-  .then(async () => {
-    console.log('MongoDB connected');
-    const deviceCount = await Device.countDocuments();
-    if (deviceCount === 0) {
-      console.log('No devices found, initializing from Excel directory...');
-      await initDevices(false);
-    } else {
-      console.log('Devices found, skipping directory initialization.');
+if (process.env.NODE_ENV !== 'test') {
+  serverConnection = mongoose
+    .connect('mongodb://localhost:27017/devicerent')
+    .then(async () => {
+      console.log('MongoDB connected');
+      const deviceCount = await Device.countDocuments();
+      if (deviceCount === 0) {
+        console.log('No devices found, initializing from Excel directory...');
+        await initDevices(false);
+      } else {
+        console.log('Devices found, skipping directory initialization.');
+      }
+      await exportRetentionData();
+      interval = setInterval(() => {
+        console.log('Checking retention data at:', new Date().toISOString());
+        exportRetentionData().catch(err => console.error('Interval execution error:', err));
+      }, 5 * 60 * 1000);
+    })
+    .catch((err) => console.error('MongoDB connection error:', err));
+}
+
+if (process.env.NODE_ENV === 'test') {
+  process.on('exit', async () => {
+    if (serverConnection) {
+      await mongoose.connection.close();
+      await mongoose.disconnect();
     }
-    await exportRetentionData();
-    setInterval(() => {
-      console.log('Checking retention data at:', new Date().toISOString());
-      exportRetentionData().catch(err => console.error('Interval execution error:', err));
-    }, 5 * 60 * 1000); // 5분 주기
-  })
-  .catch((err) => console.error('MongoDB connection error:', err));
+    if (interval) clearInterval(interval);
+  });
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
 
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -531,8 +572,10 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
 module.exports = app;
