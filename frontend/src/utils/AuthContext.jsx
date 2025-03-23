@@ -7,7 +7,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
     console.log('Initial user from localStorage:', storedUser);
-    return storedUser ? JSON.parse(storedUser) : null; // 새로고침 시 초기값 유지
+    if (!storedUser || storedUser === 'undefined') {
+      console.log('No valid user data in localStorage, returning null');
+      return null;
+    }
+    try {
+      return JSON.parse(storedUser);
+    } catch (error) {
+      console.error('Error parsing stored user data:', error.message);
+      return null;
+    }
   });
   const [loading, setLoading] = useState(true);
 
@@ -28,10 +37,18 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          console.log('Setting user from stored data:', parsedUser);
-          setUser(parsedUser); // 로컬 데이터로 상태 복원
+        if (storedUser && storedUser !== 'undefined') {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            console.log('Setting user from stored data:', parsedUser);
+            setUser(parsedUser); // 로컬 데이터로 상태 복원
+          } catch (error) {
+            console.error('Error parsing stored user data in useEffect:', error.message);
+            setUser(null);
+            localStorage.removeItem('user');
+          }
+        } else {
+          console.log('No valid stored user data, proceeding with API call');
         }
 
         console.log('Fetching /api/me to validate token');

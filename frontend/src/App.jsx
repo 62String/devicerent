@@ -47,11 +47,19 @@ class ErrorBoundary extends Component {
 }
 
 const ProtectedRoute = ({ element, isAdmin = false }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   if (process.env.NODE_ENV === 'development') {
     console.log('ProtectedRoute user:', user);
+    console.log('ProtectedRoute loading:', loading);
     console.log('ProtectedRoute isAdmin required:', isAdmin);
+  }
+
+  if (loading) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ProtectedRoute: Rendering loading state');
+    }
+    return <div>Loading...</div>;
   }
 
   if (!user) {
@@ -74,12 +82,21 @@ const ProtectedRoute = ({ element, isAdmin = false }) => {
   return element;
 };
 
-function App() {
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('AppContent - Current user:', user);
+    console.log('AppContent - Loading:', loading);
+  }
+
   return (
-    <AuthProvider>
-      <Router>
-        <ErrorBoundary>
-          <Navbar />
+    <ErrorBoundary>
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+          {user && <Navbar />}
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -99,9 +116,9 @@ function App() {
               path="/admin/export-history"
               element={<ProtectedRoute element={<ExportHistory />} isAdmin={true} />}
             />
-            <Route path="/devices" element={<Devices />} />
-            <Route path="/devices/status" element={<DeviceStatus />} />
-            <Route path="/devices/history" element={<DeviceHistory />} />
+            <Route path="/devices" element={<ProtectedRoute element={<Devices />} />} />
+            <Route path="/devices/status" element={<ProtectedRoute element={<DeviceStatus />} />} />
+            <Route path="/devices/history" element={<ProtectedRoute element={<DeviceHistory />} />} />
             <Route
               path="/devices/manage"
               element={<ProtectedRoute element={<DeviceManage />} isAdmin={true} />}
@@ -109,7 +126,17 @@ function App() {
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </ErrorBoundary>
+        </>
+      )}
+    </ErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
       </Router>
     </AuthProvider>
   );

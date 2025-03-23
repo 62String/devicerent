@@ -12,11 +12,6 @@ const User = require('./models/User');
 const fs = require('fs');
 const path = require('path');
 
-const authRoutes = require('./routes/auth');
-const deviceRoutes = require('./routes/devices');
-const approveRoutes = require('./routes/admin/approve');
-const usersRoutes = require('./routes/admin/users');
-
 const app = express();
 
 app.use(cors({
@@ -33,10 +28,19 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/devices', deviceRoutes);
-app.use('/api/admin', approveRoutes);
-app.use('/api/admin', usersRoutes);
+// 테스트 환경에서 의존성 로드 방지
+const authRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/auth') : null;
+const deviceRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/devices') : null;
+const approveRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/approve') : null;
+const usersRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/users') : null;
+
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/auth', authRoutes);
+  app.use('/api/devices', deviceRoutes);
+  app.use('/api/admin', approveRoutes);
+  app.use('/api/admin', usersRoutes);
+}
+
 app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
 const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'Device-list');
@@ -466,70 +470,6 @@ const exportRetentionData = async () => {
   }
 };
 
-const PORT = process.env.PORT || 4000;
-// server.js 하단
-let interval;
-let serverConnection;
-
-if (process.env.NODE_ENV !== 'test') {
-  serverConnection = mongoose
-    .connect('mongodb://localhost:27017/devicerent', {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 60000,
-      connectTimeoutMS: 60000
-    })
-    .then(async () => {
-      console.log('MongoDB connected');
-      const deviceCount = await Device.countDocuments();
-      if (deviceCount === 0) {
-        console.log('No devices found, initializing from Excel directory...');
-        await initDevices(false);
-      } else {
-        console.log('Devices found, skipping directory initialization.');
-      }
-      await exportRetentionData();
-      interval = setInterval(() => {
-        console.log('Checking retention data at:', new Date().toISOString());
-        exportRetentionData().catch(err => console.error('Interval execution error:', err));
-      }, 5 * 60 * 1000);
-    })
-    .catch((err) => console.error('MongoDB connection error:', err));
-}
-
-if (process.env.NODE_ENV === 'test') {
-  process.on('exit', async () => {
-    if (serverConnection) {
-      await mongoose.connection.close();
-      await mongoose.disconnect();
-    }
-    if (interval) clearInterval(interval);
-  });
-}
-
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
-
-module.exports = app;
-
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
-
-module.exports = app;
-
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
-
-module.exports = app;
-
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -576,10 +516,47 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
+const PORT = process.env.PORT || 4000;
+let interval;
+let serverConnection;
+
 if (process.env.NODE_ENV !== 'test') {
+  serverConnection = mongoose
+    .connect('mongodb://localhost:27017/devicerent', {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 60000
+    })
+    .then(async () => {
+      console.log('MongoDB connected');
+      const deviceCount = await Device.countDocuments();
+      if (deviceCount === 0) {
+        console.log('No devices found, initializing from Excel directory...');
+        await initDevices(false);
+      } else {
+        console.log('Devices found, skipping directory initialization.');
+      }
+      await exportRetentionData();
+      interval = setInterval(() => {
+        console.log('Checking retention data at:', new Date().toISOString());
+        exportRetentionData().catch(err => console.error('Interval execution error:', err));
+      }, 5 * 60 * 1000);
+    })
+    .catch((err) => console.error('MongoDB connection error:', err));
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
 
-module.exports = app;
+if (process.env.NODE_ENV === 'test') {
+  process.on('exit', async () => {
+    if (serverConnection) {
+      await mongoose.connection.close();
+      await mongoose.disconnect();
+    }
+    if (interval) clearInterval(interval);
+  });
+}
+
+module.exports = { app, initDevices };
