@@ -23,8 +23,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const log = process.env.NODE_ENV === 'test' ? () => {} : console.log;
+
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
@@ -48,7 +50,7 @@ const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'De
 if (!fs.existsSync(EXPORT_DIR)) {
   try {
     fs.mkdirSync(EXPORT_DIR, { recursive: true });
-    console.log('Created exports directory:', EXPORT_DIR);
+    log('Created exports directory:', EXPORT_DIR);
   } catch (err) {
     console.error('Failed to create exports directory:', err);
   }
@@ -79,7 +81,7 @@ const initDevices = async (force = false, exportPath = null) => {
     });
 
     if (invalidDevices.length > 0) {
-      console.log('Invalid devices found:', invalidDevices);
+      log('Invalid devices found:', invalidDevices);
       throw new Error(JSON.stringify({
         message: 'Invalid devices found',
         invalidDevices
@@ -87,7 +89,7 @@ const initDevices = async (force = false, exportPath = null) => {
     }
 
     if (devices.length > 0) {
-      console.log('Existing devices found, creating backup...');
+      log('Existing devices found, creating backup...');
       const backupDate = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const backupFile = path.join(EXPORT_DIR, `backup_${backupDate}.xlsx`);
       const wb = xlsx.utils.book_new();
@@ -103,19 +105,19 @@ const initDevices = async (force = false, exportPath = null) => {
       xlsx.utils.book_append_sheet(wb, ws, 'Devices');
       const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
       fs.writeFileSync(backupFile, buffer);
-      console.log('Backup created at:', backupFile);
+      log('Backup created at:', backupFile);
     }
 
     let workbook, sheet, rawDevices, importFilePath;
     if (exportPath && fs.existsSync(exportPath)) {
-      console.log('Using provided export path:', exportPath);
+      log('Using provided export path:', exportPath);
       workbook = xlsx.readFile(exportPath);
       importFilePath = exportPath;
     } else {
       const files = fs.readdirSync(EXPORT_DIR).filter(file => file.endsWith('.xlsx'));
       if (files.length === 0) {
-        console.log('Warning: No Excel files found in directory:', EXPORT_DIR);
-        console.log('Available files:', fs.readdirSync(EXPORT_DIR));
+        log('Warning: No Excel files found in directory:', EXPORT_DIR);
+        log('Available files:', fs.readdirSync(EXPORT_DIR));
         return;
       }
 
@@ -133,24 +135,24 @@ const initDevices = async (force = false, exportPath = null) => {
           selectedFile = file;
           break;
         }
-        console.log(`Skipping empty Excel file: ${tempPath}`);
+        log(`Skipping empty Excel file: ${tempPath}`);
       }
 
       if (!selectedFile) {
-        console.log('Error: No Excel files with data found in directory:', EXPORT_DIR);
-        console.log('Available files:', files);
+        log('Error: No Excel files with data found in directory:', EXPORT_DIR);
+        log('Available files:', files);
         return;
       }
 
       importFilePath = path.join(EXPORT_DIR, selectedFile);
-      console.log('Using latest non-empty Excel file:', importFilePath);
+      log('Using latest non-empty Excel file:', importFilePath);
       workbook = xlsx.readFile(importFilePath);
     }
 
     sheet = workbook.Sheets[workbook.SheetNames[0]];
     rawDevices = xlsx.utils.sheet_to_json(sheet);
     if (!rawDevices || rawDevices.length === 0) {
-      console.log('No devices found in Excel file:', importFilePath);
+      log('No devices found in Excel file:', importFilePath);
       return;
     }
 
@@ -159,7 +161,7 @@ const initDevices = async (force = false, exportPath = null) => {
     const newSerialNumbers = new Set();
 
     rawDevices.forEach((device, index) => {
-      console.log(`Processing device at index ${index}:`, device);
+      log(`Processing device at index ${index}:`, device);
       const issues = [];
       if (!device['시리얼 번호']) issues.push('Missing serialNumber');
       if (!device['OS 이름']) issues.push('Missing osName');
@@ -202,26 +204,26 @@ const initDevices = async (force = false, exportPath = null) => {
     });
 
     if (invalidNewDevices.length > 0) {
-      console.log('Invalid new devices skipped:', invalidNewDevices);
+      log('Invalid new devices skipped:', invalidNewDevices);
     }
     if (devicesToInsert.length === 0) {
-      console.log('No valid devices to insert');
+      log('No valid devices to insert');
       return;
     }
 
     let result;
     try {
       result = await Device.insertMany(devicesToInsert, { ordered: false });
-      console.log('New devices inserted:', result ? result.length : 0);
-      console.log('Inserted devices:', result ? result.map(d => d.serialNumber) : []);
+      log('New devices inserted:', result ? result.length : 0);
+      log('Inserted devices:', result ? result.map(d => d.serialNumber) : []);
     } catch (insertError) {
       console.error('Error during insert:', insertError);
       throw insertError;
     }
-    console.log('Total devices processed:', devicesToInsert.length);
+    log('Total devices processed:', devicesToInsert.length);
 
-    console.log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);
-    console.log('Creating ExportHistory (initDevices):', {
+    log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);
+    log('Creating ExportHistory (initDevices):', {
       timestamp: new Date(),
       filePath: `/exports/${path.basename(importFilePath)}`,
       recordCount: rawDevices.length,
@@ -313,9 +315,9 @@ app.post('/api/admin/clear-invalid-devices', async (req, res) => {
       return res.status(200).json({ message: 'No invalid devices found, proceeding with import' });
     }
 
-    console.log('Deleting invalid devices:', invalidDevices);
+    log('Deleting invalid devices:', invalidDevices);
     await Device.deleteMany({ serialNumber: { $in: invalidDevices.map(d => d.serialNumber) } });
-    console.log('Invalid devices deleted');
+    log('Invalid devices deleted');
 
     await initDevices(false, exportPath);
     res.json({ message: 'Invalid devices cleared and re-synced successfully' });
@@ -371,7 +373,7 @@ const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 if (!fs.existsSync(EXPORT_DIR_SERVER)) {
   try {
     fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
-    console.log('Created exports directory:', EXPORT_DIR_SERVER);
+    log('Created exports directory:', EXPORT_DIR_SERVER);
   } catch (err) {
     console.error('Failed to create exports directory:', err);
   }
@@ -380,24 +382,21 @@ if (!fs.existsSync(EXPORT_DIR_SERVER)) {
 const exportRetentionData = async () => {
   try {
     const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
-    console.log('Attempting to check retention data at:', new Date().toISOString());
-    console.log('Exporting retention data with query:', query);
+    log('Attempting to check retention data at:', new Date().toISOString());
+    log('Exporting retention data with query:', query);
     const history = await RentalHistory.find(query).sort({ timestamp: -1 }).lean();
-    console.log('Fetched history for export:', history.length, history);
+    log('Fetched history for export:', history.length, history);
 
     if (history.length === 0) {
-      console.log('No data older than 2 years found');
+      log('No data older than 2 years found');
       return;
     }
 
-    const historyByMonth = {};
-    history.forEach(record => {
+    const historyByMonth = history.reduce((acc, record) => {
       const date = new Date(record.timestamp);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!historyByMonth[monthKey]) {
-        historyByMonth[monthKey] = [];
-      }
-      historyByMonth[monthKey].push({
+      acc[monthKey] = acc[monthKey] || [];
+      acc[monthKey].push({
         '시리얼 번호': record.serialNumber,
         '모델명': record.deviceInfo?.modelName || 'N/A',
         'OS 이름': record.deviceInfo?.osName || 'N/A',
@@ -407,7 +406,8 @@ const exportRetentionData = async () => {
         '반납 시간': record.action === 'return' ? new Date(record.timestamp).toLocaleString() : 'N/A',
         '특이사항': record.remark || '없음'
       });
-    });
+      return acc;
+    }, {});
 
     const wb = xlsx.utils.book_new();
     for (const monthKey in historyByMonth) {
@@ -421,18 +421,18 @@ const exportRetentionData = async () => {
 
     try {
       fs.writeFileSync(filePath, buffer);
-      console.log('Retention data exported to:', filePath);
+      log('Retention data exported to:', filePath);
     } catch (writeError) {
       console.error('File write error:', writeError);
       throw new Error('Failed to save export file');
     }
 
     const deleteResult = await RentalHistory.deleteMany(query);
-    console.log('Deleted retention data result:', deleteResult);
+    log('Deleted retention data result:', deleteResult);
     if (deleteResult.deletedCount > 0) {
-      console.log(`Deleted ${deleteResult.deletedCount} records from database`);
+      log(`Deleted ${deleteResult.deletedCount} records from database`);
     } else {
-      console.log('No records deleted from database');
+      log('No records deleted from database');
     }
 
     const deletedSerialNumbers = history.map(record => record.serialNumber);
@@ -440,9 +440,9 @@ const exportRetentionData = async () => {
       { serialNumber: { $in: deletedSerialNumbers }, rentedAt: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } },
       { $set: { rentedBy: null, rentedAt: null, remark: '' } }
     );
-    console.log('Updated devices with expired rentals');
+    log('Updated devices with expired rentals');
 
-    console.log('Creating ExportHistory (retention):', {
+    log('Creating ExportHistory (retention):', {
       timestamp: new Date(),
       filePath: `/exports/${fileName}`,
       recordCount: history.length,
@@ -467,6 +467,7 @@ const exportRetentionData = async () => {
       code: error.code,
       name: error.name
     });
+    throw error;
   }
 };
 
@@ -486,21 +487,21 @@ app.get('/api/data', async (req, res) => {
 });
 
 app.get('/api/me', async (req, res) => {
-  console.log('Received /api/me request with token:', req.headers.authorization);
+  log('Received /api/me request with token:', req.headers.authorization);
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
-    console.log('No token provided');
+    log('No token provided');
     return res.status(401).json({ message: 'No token provided' });
   }
   try {
     const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    console.log('Decoded token:', decoded);
+    log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
     if (!user) {
-      console.log('User not found for id:', decoded.id);
+      log('User not found for id:', decoded.id);
       return res.status(404).json({ message: 'User not found' });
     }
-    console.log('User found:', user);
+    log('User found:', user);
     res.json({
       user: {
         id: user.id,
@@ -528,24 +529,24 @@ if (process.env.NODE_ENV !== 'test') {
       connectTimeoutMS: 60000
     })
     .then(async () => {
-      console.log('MongoDB connected');
+      log('MongoDB connected');
       const deviceCount = await Device.countDocuments();
       if (deviceCount === 0) {
-        console.log('No devices found, initializing from Excel directory...');
+        log('No devices found, initializing from Excel directory...');
         await initDevices(false);
       } else {
-        console.log('Devices found, skipping directory initialization.');
+        log('Devices found, skipping directory initialization.');
       }
       await exportRetentionData();
       interval = setInterval(() => {
-        console.log('Checking retention data at:', new Date().toISOString());
+        log('Checking retention data at:', new Date().toISOString());
         exportRetentionData().catch(err => console.error('Interval execution error:', err));
       }, 5 * 60 * 1000);
     })
     .catch((err) => console.error('MongoDB connection error:', err));
 
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    log(`Server running on port ${PORT}`);
   });
 }
 
@@ -559,4 +560,4 @@ if (process.env.NODE_ENV === 'test') {
   });
 }
 
-module.exports = { app, initDevices };
+module.exports = { app, initDevices, exportRetentionData };

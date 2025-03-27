@@ -3,15 +3,15 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for backend/server.js</title>
+    <title>Code coverage report for server.js</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="../prettify.css" />
-    <link rel="stylesheet" href="../base.css" />
-    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <link rel="stylesheet" href="prettify.css" />
+    <link rel="stylesheet" href="base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style type='text/css'>
         .coverage-summary .sorter {
-            background-image: url(../sort-arrow-sprite.png);
+            background-image: url(sort-arrow-sprite.png);
         }
     </style>
 </head>
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">backend</a> server.js</h1>
+        <h1><a href="index.html">All files</a> server.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -651,6 +651,8 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1003,8 +1005,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -1212,8 +1212,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 &nbsp;
+const log = process.env.NODE_ENV === 'test' ? () =&gt; {} : <span class="branch-1 cbranch-no" title="branch not covered" >console.log;</span>
+&nbsp;
 app.use(<span class="fstat-no" title="function not covered" >(r</span>eq, res, next) =&gt; {
-<span class="cstat-no" title="statement not covered" >  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);</span>
+<span class="cstat-no" title="statement not covered" >  log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);</span>
 <span class="cstat-no" title="statement not covered" >  next();</span>
 });
 &nbsp;
@@ -1237,7 +1239,7 @@ const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'De
 <span class="missing-if-branch" title="else path not taken" >E</span>if (!fs.existsSync(EXPORT_DIR)) {
   try {
     fs.mkdirSync(EXPORT_DIR, { recursive: true });
-    console.log('Created exports directory:', EXPORT_DIR);
+    log('Created exports directory:', EXPORT_DIR);
   } catch (err) {
 <span class="cstat-no" title="statement not covered" >    console.error('Failed to create exports directory:', err);</span>
   }
@@ -1268,7 +1270,7 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
     });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    if (invalidDevices.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Invalid devices found:', invalidDevices);</span>
+<span class="cstat-no" title="statement not covered" >      log('Invalid devices found:', invalidDevices);</span>
 <span class="cstat-no" title="statement not covered" >      throw new Error(JSON.stringify({</span>
         message: 'Invalid devices found',
         invalidDevices
@@ -1276,7 +1278,7 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
     }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    if (devices.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Existing devices found, creating backup...');</span>
+<span class="cstat-no" title="statement not covered" >      log('Existing devices found, creating backup...');</span>
       const backupDate = <span class="cstat-no" title="statement not covered" >new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);</span>
       const backupFile = <span class="cstat-no" title="statement not covered" >path.join(EXPORT_DIR, `backup_${backupDate}.xlsx`);</span>
       const wb = <span class="cstat-no" title="statement not covered" >xlsx.utils.book_new();</span>
@@ -1292,19 +1294,19 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
 <span class="cstat-no" title="statement not covered" >      xlsx.utils.book_append_sheet(wb, ws, 'Devices');</span>
       const buffer = <span class="cstat-no" title="statement not covered" >xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });</span>
 <span class="cstat-no" title="statement not covered" >      fs.writeFileSync(backupFile, buffer);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Backup created at:', backupFile);</span>
+<span class="cstat-no" title="statement not covered" >      log('Backup created at:', backupFile);</span>
     }
 &nbsp;
     let workbook, sheet, rawDevices, importFilePath;
 <span class="cstat-no" title="statement not covered" >    if (exportPath &amp;&amp; fs.existsSync(exportPath)) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Using provided export path:', exportPath);</span>
+<span class="cstat-no" title="statement not covered" >      log('Using provided export path:', exportPath);</span>
 <span class="cstat-no" title="statement not covered" >      workbook = xlsx.readFile(exportPath);</span>
 <span class="cstat-no" title="statement not covered" >      importFilePath = exportPath;</span>
     } else {
       const files = <span class="cstat-no" title="statement not covered" >fs.readdirSync(EXPORT_DIR).filter(<span class="fstat-no" title="function not covered" >fi</span>le =&gt; <span class="cstat-no" title="statement not covered" >file.endsWith('.xlsx'))</span>;</span>
 <span class="cstat-no" title="statement not covered" >      if (files.length === 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Warning: No Excel files found in directory:', EXPORT_DIR);</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Available files:', fs.readdirSync(EXPORT_DIR));</span>
+<span class="cstat-no" title="statement not covered" >        log('Warning: No Excel files found in directory:', EXPORT_DIR);</span>
+<span class="cstat-no" title="statement not covered" >        log('Available files:', fs.readdirSync(EXPORT_DIR));</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
@@ -1322,24 +1324,24 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
 <span class="cstat-no" title="statement not covered" >          selectedFile = file;</span>
 <span class="cstat-no" title="statement not covered" >          break;</span>
         }
-<span class="cstat-no" title="statement not covered" >        console.log(`Skipping empty Excel file: ${tempPath}`);</span>
+<span class="cstat-no" title="statement not covered" >        log(`Skipping empty Excel file: ${tempPath}`);</span>
       }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      if (!selectedFile) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Error: No Excel files with data found in directory:', EXPORT_DIR);</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Available files:', files);</span>
+<span class="cstat-no" title="statement not covered" >        log('Error: No Excel files with data found in directory:', EXPORT_DIR);</span>
+<span class="cstat-no" title="statement not covered" >        log('Available files:', files);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      importFilePath = path.join(EXPORT_DIR, selectedFile);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Using latest non-empty Excel file:', importFilePath);</span>
+<span class="cstat-no" title="statement not covered" >      log('Using latest non-empty Excel file:', importFilePath);</span>
 <span class="cstat-no" title="statement not covered" >      workbook = xlsx.readFile(importFilePath);</span>
     }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    sheet = workbook.Sheets[workbook.SheetNames[0]];</span>
 <span class="cstat-no" title="statement not covered" >    rawDevices = xlsx.utils.sheet_to_json(sheet);</span>
 <span class="cstat-no" title="statement not covered" >    if (!rawDevices || rawDevices.length === 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('No devices found in Excel file:', importFilePath);</span>
+<span class="cstat-no" title="statement not covered" >      log('No devices found in Excel file:', importFilePath);</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -1348,7 +1350,7 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
     const newSerialNumbers = <span class="cstat-no" title="statement not covered" >new Set();</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    rawDevices.forEach(<span class="fstat-no" title="function not covered" >(d</span>evice, index) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`Processing device at index ${index}:`, device);</span>
+<span class="cstat-no" title="statement not covered" >      log(`Processing device at index ${index}:`, device);</span>
       const issues = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >      if (!device['시리얼 번호']) <span class="cstat-no" title="statement not covered" >issues.push('Missing serialNumber');</span></span>
 <span class="cstat-no" title="statement not covered" >      if (!device['OS 이름']) <span class="cstat-no" title="statement not covered" >issues.push('Missing osName');</span></span>
@@ -1391,26 +1393,26 @@ const initDevices = <span class="fstat-no" title="function not covered" >as</spa
     });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    if (invalidNewDevices.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Invalid new devices skipped:', invalidNewDevices);</span>
+<span class="cstat-no" title="statement not covered" >      log('Invalid new devices skipped:', invalidNewDevices);</span>
     }
 <span class="cstat-no" title="statement not covered" >    if (devicesToInsert.length === 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('No valid devices to insert');</span>
+<span class="cstat-no" title="statement not covered" >      log('No valid devices to insert');</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
     let result;
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      result = await Device.insertMany(devicesToInsert, { ordered: false });</span>
-<span class="cstat-no" title="statement not covered" >      console.log('New devices inserted:', result ? result.length : 0);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('Inserted devices:', result ? result.map(<span class="fstat-no" title="function not covered" >d </span>=&gt; <span class="cstat-no" title="statement not covered" >d.serialNumber)</span> : []);</span>
+<span class="cstat-no" title="statement not covered" >      log('New devices inserted:', result ? result.length : 0);</span>
+<span class="cstat-no" title="statement not covered" >      log('Inserted devices:', result ? result.map(<span class="fstat-no" title="function not covered" >d </span>=&gt; <span class="cstat-no" title="statement not covered" >d.serialNumber)</span> : []);</span>
     } catch (insertError) {
 <span class="cstat-no" title="statement not covered" >      console.error('Error during insert:', insertError);</span>
 <span class="cstat-no" title="statement not covered" >      throw insertError;</span>
     }
-<span class="cstat-no" title="statement not covered" >    console.log('Total devices processed:', devicesToInsert.length);</span>
+<span class="cstat-no" title="statement not covered" >    log('Total devices processed:', devicesToInsert.length);</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log('Creating ExportHistory (initDevices):', {</span>
+<span class="cstat-no" title="statement not covered" >    log(`[${new Date().toISOString()}] import - File: ${importFilePath}`);</span>
+<span class="cstat-no" title="statement not covered" >    log('Creating ExportHistory (initDevices):', {</span>
       timestamp: new Date(),
       filePath: `/exports/${path.basename(importFilePath)}`,
       recordCount: rawDevices.length,
@@ -1502,9 +1504,9 @@ app.post('/api/admin/clear-invalid-devices', <span class="fstat-no" title="funct
 <span class="cstat-no" title="statement not covered" >      return res.status(200).json({ message: 'No invalid devices found, proceeding with import' });</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log('Deleting invalid devices:', invalidDevices);</span>
+<span class="cstat-no" title="statement not covered" >    log('Deleting invalid devices:', invalidDevices);</span>
 <span class="cstat-no" title="statement not covered" >    await Device.deleteMany({ serialNumber: { $in: invalidDevices.map(<span class="fstat-no" title="function not covered" >d </span>=&gt; <span class="cstat-no" title="statement not covered" >d.serialNumber)</span> } });</span>
-<span class="cstat-no" title="statement not covered" >    console.log('Invalid devices deleted');</span>
+<span class="cstat-no" title="statement not covered" >    log('Invalid devices deleted');</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    await initDevices(false, exportPath);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ message: 'Invalid devices cleared and re-synced successfully' });</span>
@@ -1560,13 +1562,11 @@ const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 <span class="missing-if-branch" title="else path not taken" >E</span>if (!fs.existsSync(EXPORT_DIR_SERVER)) {
   try {
     fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
-    console.log('Created exports directory:', EXPORT_DIR_SERVER);
+    log('Created exports directory:', EXPORT_DIR_SERVER);
   } catch (err) {
 <span class="cstat-no" title="statement not covered" >    console.error('Failed to create exports directory:', err);</span>
   }
 }
-&nbsp;
-const log = process.env.NODE_ENV === 'test' ? () =&gt; {} : <span class="branch-1 cbranch-no" title="branch not covered" >console.log;</span>
 &nbsp;
 const exportRetentionData = async () =&gt; {
   try {
@@ -1676,21 +1676,21 @@ app.get('/api/data', <span class="fstat-no" title="function not covered" >as</sp
 });
 &nbsp;
 app.get('/api/me', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {
-<span class="cstat-no" title="statement not covered" >  console.log('Received /api/me request with token:', req.headers.authorization);</span>
+<span class="cstat-no" title="statement not covered" >  log('Received /api/me request with token:', req.headers.authorization);</span>
   const token = <span class="cstat-no" title="statement not covered" >req.headers.authorization?.split(' ')[1];</span>
 <span class="cstat-no" title="statement not covered" >  if (!token) {</span>
-<span class="cstat-no" title="statement not covered" >    console.log('No token provided');</span>
+<span class="cstat-no" title="statement not covered" >    log('No token provided');</span>
 <span class="cstat-no" title="statement not covered" >    return res.status(401).json({ message: 'No token provided' });</span>
   }
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const decoded = <span class="cstat-no" title="statement not covered" >await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');</span>
-<span class="cstat-no" title="statement not covered" >    console.log('Decoded token:', decoded);</span>
+<span class="cstat-no" title="statement not covered" >    log('Decoded token:', decoded);</span>
     const user = <span class="cstat-no" title="statement not covered" >await User.findOne({ id: decoded.id });</span>
 <span class="cstat-no" title="statement not covered" >    if (!user) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('User not found for id:', decoded.id);</span>
+<span class="cstat-no" title="statement not covered" >      log('User not found for id:', decoded.id);</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(404).json({ message: 'User not found' });</span>
     }
-<span class="cstat-no" title="statement not covered" >    console.log('User found:', user);</span>
+<span class="cstat-no" title="statement not covered" >    log('User found:', user);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({</span>
       user: {
         id: user.id,
@@ -1718,24 +1718,24 @@ let serverConnection;
       connectTimeoutMS: 60000
     })
     .then(<span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {
-<span class="cstat-no" title="statement not covered" >      console.log('MongoDB connected');</span>
+<span class="cstat-no" title="statement not covered" >      log('MongoDB connected');</span>
       const deviceCount = <span class="cstat-no" title="statement not covered" >await Device.countDocuments();</span>
 <span class="cstat-no" title="statement not covered" >      if (deviceCount === 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('No devices found, initializing from Excel directory...');</span>
+<span class="cstat-no" title="statement not covered" >        log('No devices found, initializing from Excel directory...');</span>
 <span class="cstat-no" title="statement not covered" >        await initDevices(false);</span>
       } else {
-<span class="cstat-no" title="statement not covered" >        console.log('Devices found, skipping directory initialization.');</span>
+<span class="cstat-no" title="statement not covered" >        log('Devices found, skipping directory initialization.');</span>
       }
 <span class="cstat-no" title="statement not covered" >      await exportRetentionData();</span>
 <span class="cstat-no" title="statement not covered" >      interval = setInterval(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Checking retention data at:', new Date().toISOString());</span>
+<span class="cstat-no" title="statement not covered" >        log('Checking retention data at:', new Date().toISOString());</span>
 <span class="cstat-no" title="statement not covered" >        exportRetentionData().catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; <span class="cstat-no" title="statement not covered" >console.error('Interval execution error:', err))</span>;</span>
       }, 5 * 60 * 1000);
     })
     .catch(<span class="fstat-no" title="function not covered" >(e</span>rr) =&gt; <span class="cstat-no" title="statement not covered" >console.error('MongoDB connection error:', err))</span>;
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  app.listen(PORT, <span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`Server running on port ${PORT}`);</span>
+<span class="cstat-no" title="statement not covered" >    log(`Server running on port ${PORT}`);</span>
   });
 }
 &nbsp;
@@ -1756,16 +1756,16 @@ module.exports = { app, initDevices, exportRetentionData };</pre></td></tr></tab
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-03-27T07:45:25.659Z
+                at 2025-03-27T08:15:01.179Z
             </div>
-        <script src="../prettify.js"></script>
+        <script src="prettify.js"></script>
         <script>
             window.onload = function () {
                 prettyPrint();
             };
         </script>
-        <script src="../sorter.js"></script>
-        <script src="../block-navigation.js"></script>
+        <script src="sorter.js"></script>
+        <script src="block-navigation.js"></script>
     </body>
 </html>
     

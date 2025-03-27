@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "jest --coverage",
+    "test": "jest --config=tests/jest.config.js --coverage",
     "test:server": "jest tests/server/",
     "test:models": "jest tests/models",
     "test:routes": "jest tests/routes",
@@ -31,16 +31,5 @@
     "jsdoc": "^4.0.4",
     "mongodb-memory-server": "^10.1.4",
     "supertest": "^7.1.0"
-  },
-  "jest": {
-    "reporters": [
-      "default",
-      [
-        "jest-allure2-reporter",
-        {
-          "outputDir": "allure-results"
-        }
-      ]
-    ]
   }
 }
