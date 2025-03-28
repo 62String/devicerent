@@ -1,0 +1,1 @@
+{"uuid":"c79199f1-4929-50d4-9800-3c4bb5748e45","name":"POST /api/auth/register should fail to register if user already exists (0)","children":["3a653c6a-b9cc-4f51-989f-b32802e8508d"]}

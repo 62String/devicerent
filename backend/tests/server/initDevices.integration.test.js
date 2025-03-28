@@ -14,7 +14,6 @@ const mockDevice = {
   find: jest.fn(),
   deleteMany: jest.fn()
 };
-jest.mock('../../models/Device', () => mockDevice);
 
 // User 모델 모킹
 const mockUser = {
@@ -22,7 +21,6 @@ const mockUser = {
   deleteMany: jest.fn(),
   comparePassword: jest.fn()
 };
-jest.mock('../../models/User', () => mockUser);
 
 // server.js 모킹 및 의존 관계 모킹
 jest.mock('../../server', () => {
@@ -81,11 +79,18 @@ describe('POST /api/admin/init-devices (Integration)', () => {
   console.log('Running initDevices integration tests');
 
   beforeAll(async () => {
+    // jest.mock 호출을 beforeAll 내에서 실행
+    jest.mock('../../models/Device', () => mockDevice);
+    jest.mock('../../models/User', () => mockUser);
     token = jwt.sign({ id: 'admin-id' }, process.env.JWT_SECRET || '비밀열쇠12345678');
   }, 60000);
 
   afterAll(async () => {
     // 모킹된 상태이므로 연결 종료 불필요
+    const exportPath = path.join(__dirname, 'test.xlsx');
+    if (fs.existsSync(exportPath)) {
+      fs.unlinkSync(exportPath);
+    }
   }, 60000);
 
   afterEach(async () => {

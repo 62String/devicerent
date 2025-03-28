@@ -23,9 +23,6 @@ const mockUser = {
   comparePassword: jest.fn()
 };
 
-jest.mock('../../models/Device', () => mockDevice);
-jest.mock('../../models/User', () => mockUser);
-
 // server.js 모킹 및 의존 관계 모킹
 jest.mock('../../server', () => {
   const express = require('express');
@@ -67,6 +64,9 @@ describe('GET /api/admin/verify-data-integrity', () => {
   let token;
 
   beforeAll(async () => {
+    // jest.mock 호출을 beforeAll 내에서 실행
+    jest.mock('../../models/Device', () => mockDevice);
+    jest.mock('../../models/User', () => mockUser);
     token = jwt.sign({ id: 'admin-id' }, process.env.JWT_SECRET || '비밀열쇠12345678');
   }, 60000);
 
