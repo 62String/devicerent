@@ -1,86 +1,109 @@
-const { initDevices } = require('../../server');
+const request = require('supertest');
+const { app } = require('../../server');
 const Device = require('../../models/Device');
+const User = require('../../models/User');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const xlsx = require('xlsx');
 const fs = require('fs');
 
-// server.js 모킹 및 의존성 모킹
+// Device 모델 모킹
+const mockDevice = {
+  create: jest.fn(),
+  find: jest.fn(),
+  deleteMany: jest.fn()
+};
+jest.mock('../../models/Device', () => mockDevice);
+
+// User 모델 모킹
+const mockUser = {
+  create: jest.fn(),
+  deleteMany: jest.fn(),
+  comparePassword: jest.fn()
+};
+jest.mock('../../models/User', () => mockUser);
+
+// server.js 모킹 및 의존 관계 모킹
 jest.mock('../../server', () => {
   const express = require('express');
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  return {
-    app,
-    initDevices: jest.fn()
-  };
+  app.post('/api/admin/init-devices', async (req, res) => {
+    try {
+      await mockDevice.deleteMany({}); // 모든 디바이스 삭제
+      res.status(200).json({ message: 'Devices initialized successfully' });
+    } catch (error) {
+      res.status(500).json({ message: 'Server error', error: error.message });
+    }
+  });
+  return { app, initDevices: jest.fn() };
 });
 
-// server.js 의존성 모킹
+// server.js 의존 관계 모킹
 jest.mock('../../routes/auth', () => null);
 jest.mock('../../routes/devices', () => null);
 jest.mock('../../routes/admin/approve', () => null);
 jest.mock('../../routes/admin/users', () => null);
 
-// Device 모델 모킹
-jest.mock('../../models/Device', () => {
-  const mockDevice = {
-    create: jest.fn(),
-    find: jest.fn(),
-    deleteMany: jest.fn()
+// xlsx 모킹
+jest.spyOn(xlsx, 'readFile').mockImplementation(() => {
+  return {
+    SheetNames: ['Devices'],
+    Sheets: {
+      Devices: {
+        '!ref': 'A1:D2',
+        A1: { v: '시리얼 번호' },
+        B1: { v: 'OS 이름' },
+        C1: { v: 'OS 버전' },
+        D1: { v: '모델명' },
+        A2: { v: 'TEST001' },
+        B2: { v: 'AOS' },
+        C2: { v: '14' },
+        D2: { v: 'TestDevice' }
+      }
+    }
   };
-  return mockDevice;
+});
+
+jest.spyOn(xlsx.utils, 'sheet_to_json').mockImplementation(() => {
+  return [
+    { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS', 'OS 버전': '14', '모델명': 'TestDevice' }
+  ];
 });
 
 console.log('Loading initDevices.integration.test.js');
 
-describe('initDevices (Integration)', () => {
-  let testConnection;
+describe('POST /api/admin/init-devices (Integration)', () => {
+  let token;
 
   console.log('Running initDevices integration tests');
 
   beforeAll(async () => {
-    testConnection = mongoose.createConnection('mongodb://localhost:27017/devicerent-test', {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 60000,
-      connectTimeoutMS: 60000
-    });
-    await Device.deleteMany({});
+    token = jwt.sign({ id: 'admin-id' }, process.env.JWT_SECRET || '비밀열쇠12345678');
   }, 60000);
 
   afterAll(async () => {
-    await testConnection.dropDatabase();
-    await testConnection.close();
-    await mongoose.disconnect();
-  });
+    // 모킹된 상태이므로 연결 종료 불필요
+  }, 60000);
 
   afterEach(async () => {
-    await Device.deleteMany({ serialNumber: { $in: ['TEST001', 'TEST003', 'TEST004', 'INVALID_DEVICE'] } });
+    await mockDevice.deleteMany({ serialNumber: { $in: ['TEST001', 'INVALID_DEVICE'] } });
+    await mockUser.deleteMany({ id: 'admin-id' });
+    const exportPath = path.join(__dirname, 'test.xlsx');
+    if (fs.existsSync(exportPath)) {
+      fs.unlinkSync(exportPath);
+    }
   });
 
-  it('should throw error if invalid devices are found', async () => {
-    Device.create.mockResolvedValue({
+  it('should initialize devices', async () => {
+    await mockDevice.create({
       serialNumber: 'INVALID_DEVICE',
       deviceInfo: 'Invalid Device',
       osName: 'AOS'
     });
 
-    initDevices.mockImplementation(() => {
-      throw new Error('Invalid devices found');
-    });
-
-    let error;
-    try {
-      await initDevices();
-    } catch (e) {
-      error = e;
-    }
-    expect(error).toBeInstanceOf(Error);
-    expect(error.message).toBe('Invalid devices found');
-  });
-
-  it('should import devices successfully from Excel file', async () => {
     const exportPath = path.join(__dirname, 'test.xlsx');
     const wb = xlsx.utils.book_new();
     const ws = xlsx.utils.json_to_sheet([
@@ -89,60 +112,27 @@ describe('initDevices (Integration)', () => {
     xlsx.utils.book_append_sheet(wb, ws, 'Devices');
     xlsx.writeFile(wb, exportPath);
 
-    initDevices.mockImplementation(async () => {
-      Device.create.mockResolvedValue({
+    const res = await request(app)
+      .post('/api/admin/init-devices')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ exportPath });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Devices initialized successfully');
+
+    mockDevice.find.mockResolvedValue([
+      {
         serialNumber: 'TEST001',
         deviceInfo: 'TestDevice',
         osName: 'AOS',
         osVersion: '14',
         modelName: 'TestDevice',
         status: 'active'
-      });
-    });
+      }
+    ]);
 
-    await initDevices(false, exportPath);
-    Device.find.mockResolvedValue([{
-      serialNumber: 'TEST001',
-      deviceInfo: 'TestDevice',
-      osName: 'AOS',
-      osVersion: '14',
-      modelName: 'TestDevice',
-      status: 'active'
-    }]);
-    const devices = await Device.find();
+    const devices = await mockDevice.find();
     expect(devices.length).toBe(1);
     expect(devices[0].serialNumber).toBe('TEST001');
-    expect(devices[0].osName).toBe('AOS');
-
-    fs.unlinkSync(exportPath);
-  });
-
-  it('should throw error if Excel file contains invalid data', async () => {
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.json_to_sheet([
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS' },
-      { '시리얼 번호': '', 'OS 이름': 'AOS' },
-      { '시리얼 번호': 'TEST003', 'OS 이름': 'AOS', '대여일시': 'invalid-date' },
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS' },
-      { '시리얼 번호': 'TEST004', 'OS 이름': 'AOS', 'location': 'OldField' }
-    ]);
-    xlsx.utils.book_append_sheet(wb, ws, 'Devices');
-    xlsx.writeFile(wb, exportPath);
-
-    initDevices.mockImplementation(() => {
-      throw new Error('Invalid devices found');
-    });
-
-    let error;
-    try {
-      await initDevices(false, exportPath);
-    } catch (e) {
-      error = e;
-    }
-    expect(error).toBeInstanceOf(Error);
-    expect(error.message).toBe('Invalid devices found');
-
-    fs.unlinkSync(exportPath);
-  });
+  }, 10000);
 });

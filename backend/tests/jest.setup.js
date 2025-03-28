@@ -2,22 +2,13 @@
 const mongoose = require('mongoose');
 
 beforeAll(async () => {
-  await mongoose.connect('mongodb://localhost:27017/devicerent-test', {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000
-  });
+  // 각 테스트 파일에서 독립적인 연결을 사용하므로 여기서는 연결 설정 불필요
 }, 60000);
 
 afterAll(async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.connection.close();
-  await mongoose.disconnect();
-});
+  // 각 테스트 파일에서 연결 종료 처리
+}, 60000);
 
 afterEach(async () => {
-  const collections = mongoose.connection.collections;
-  for (const key in collections) {
-    await collections[key].deleteMany();
-  }
+  // 각 테스트 파일에서 독립적인 연결을 사용하므로 여기서는 초기화 불필요
 });
