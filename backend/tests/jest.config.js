@@ -1,15 +1,32 @@
 module.exports = {
   testEnvironment: 'node',
-  setupFilesAfterEnv: ['./jest.setup.js'],
   testMatch: ['**/tests/**/*.test.js'],
-  coveragePathIgnorePatterns: [],
-  reporters: [
-    'default',
-    [
-      'jest-allure2-reporter',
-      {
-        outputDir: 'allure-results'
-      }
-    ]
-  ]
+  rootDir: '..',
+  coveragePathIgnorePatterns: [
+    '/tests/',
+    '/tests/routes/',
+    '/tests/server/',
+    '/coverage/'
+  ],
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'routes/**/*.js',
+    'models/**/*.js',
+    'utils/**/*.js',
+    'server.js',
+    '!**/*.test.js',
+    '!**/*.integration.test.js' // 추가 패턴
+  ],
+  coverageDirectory: 'tests/coverage',
+  coverageReporters: ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      statements: 0,
+      branches: 0,
+      functions: 0,
+      lines: 0
+    }
+  },
+  verbose: true,
+  reporters: ['default']
 };
