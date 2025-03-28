@@ -7,8 +7,8 @@ const UserSchema = new Schema({
   affiliation: { type: String, required: true },
   id: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  position: { type: String, required: true, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] }, // 5개 직급
-  roleLevel: { type: Number, default: 5 }, // 기본값 5 (최하위 권한)
+  position: { type: String, required: true, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] },
+  roleLevel: { type: Number, default: 5 },
   isPending: { type: Boolean, default: true },
   isAdmin: { type: Boolean, default: false }
 });
@@ -24,7 +24,7 @@ UserSchema.pre('save', async function(next) {
 
   // 직급에 따라 권한 레벨 설정 (역순)
   if (user.isModified('position')) {
-    if (user.position === '센터장') user.roleLevel = 1; // 나와 센터장님
+    if (user.position === '센터장') user.roleLevel = 1;
     else if (user.position === '실장') user.roleLevel = 2;
     else if (user.position === '팀장') user.roleLevel = 3;
     else if (user.position === '파트장') user.roleLevel = 4;
@@ -51,8 +51,8 @@ UserSchema.set('toJSON', {
     ret.id = ret.id;
     ret.name = ret.name;
     ret.affiliation = ret.affiliation;
-    ret.position = ret.position; // 추가
-    ret.roleLevel = ret.roleLevel; // 추가
+    ret.position = ret.position;
+    ret.roleLevel = ret.roleLevel;
     ret.isPending = ret.isPending;
     ret.isAdmin = ret.isAdmin;
     delete ret.password;

@@ -1,3 +1,4 @@
+// jest.setup.js
 const mongoose = require('mongoose');
 
 beforeAll(async () => {

@@ -1,48 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1743064857166" clover="3.2.0">
-  <project timestamp="1743064857166" name="All files">
-    <metrics statements="37" coveredstatements="12" conditionals="16" coveredconditionals="0" methods="3" coveredmethods="0" elements="56" coveredelements="12" complexity="0" loc="37" ncloc="37" packages="1" files="2" classes="2"/>
+<coverage generated="1743151001865" clover="3.2.0">
+  <project timestamp="1743151001865" name="All files">
+    <metrics statements="37" coveredstatements="37" conditionals="18" coveredconditionals="14" methods="3" coveredmethods="3" elements="58" coveredelements="54" complexity="0" loc="37" ncloc="37" packages="1" files="2" classes="2"/>
     <file name="Device.js" path="C:\Users\GAMEDEX\Projects\DEVICERENTALAPI\backend\models\Device.js">
-      <metrics statements="4" coveredstatements="4" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <metrics statements="4" coveredstatements="4" conditionals="2" coveredconditionals="1" methods="0" coveredmethods="0"/>
       <line num="1" count="1" type="stmt"/>
       <line num="2" count="1" type="stmt"/>
       <line num="4" count="1" type="stmt"/>
-      <line num="23" count="1" type="stmt"/>
+      <line num="27" count="1" type="stmt"/>
     </file>
     <file name="User.js" path="C:\Users\GAMEDEX\Projects\DEVICERENTALAPI\backend\models\User.js">
-      <metrics statements="33" coveredstatements="8" conditionals="16" coveredconditionals="0" methods="3" coveredmethods="0"/>
+      <metrics statements="33" coveredstatements="33" conditionals="16" coveredconditionals="13" methods="3" coveredmethods="3"/>
       <line num="1" count="1" type="stmt"/>
       <line num="2" count="1" type="stmt"/>
       <line num="3" count="1" type="stmt"/>
       <line num="5" count="1" type="stmt"/>
       <line num="16" count="1" type="stmt"/>
-      <line num="17" count="0" type="stmt"/>
-      <line num="20" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="21" count="0" type="stmt"/>
-      <line num="22" count="0" type="stmt"/>
-      <line num="26" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="27" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="28" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="29" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="30" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="31" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="35" count="0" type="cond" truecount="0" falsecount="2"/>
-      <line num="36" count="0" type="stmt"/>
-      <line num="38" count="0" type="stmt"/>
-      <line num="41" count="0" type="stmt"/>
+      <line num="17" count="5" type="stmt"/>
+      <line num="20" count="5" type="cond" truecount="2" falsecount="0"/>
+      <line num="21" count="3" type="stmt"/>
+      <line num="22" count="3" type="stmt"/>
+      <line num="26" count="5" type="cond" truecount="2" falsecount="0"/>
+      <line num="27" count="4" type="cond" truecount="2" falsecount="0"/>
+      <line num="28" count="3" type="cond" truecount="1" falsecount="1"/>
+      <line num="29" count="3" type="cond" truecount="1" falsecount="1"/>
+      <line num="30" count="3" type="cond" truecount="2" falsecount="0"/>
+      <line num="31" count="1" type="cond" truecount="1" falsecount="1"/>
+      <line num="35" count="5" type="cond" truecount="2" falsecount="0"/>
+      <line num="36" count="3" type="stmt"/>
+      <line num="38" count="2" type="stmt"/>
+      <line num="41" count="5" type="stmt"/>
       <line num="44" count="1" type="stmt"/>
-      <line num="45" count="0" type="stmt"/>
+      <line num="45" count="2" type="stmt"/>
       <line num="49" count="1" type="stmt"/>
-      <line num="51" count="0" type="stmt"/>
-      <line num="52" count="0" type="stmt"/>
-      <line num="53" count="0" type="stmt"/>
-      <line num="54" count="0" type="stmt"/>
-      <line num="55" count="0" type="stmt"/>
-      <line num="56" count="0" type="stmt"/>
-      <line num="57" count="0" type="stmt"/>
-      <line num="58" count="0" type="stmt"/>
-      <line num="59" count="0" type="stmt"/>
-      <line num="60" count="0" type="stmt"/>
+      <line num="51" count="1" type="stmt"/>
+      <line num="52" count="1" type="stmt"/>
+      <line num="53" count="1" type="stmt"/>
+      <line num="54" count="1" type="stmt"/>
+      <line num="55" count="1" type="stmt"/>
+      <line num="56" count="1" type="stmt"/>
+      <line num="57" count="1" type="stmt"/>
+      <line num="58" count="1" type="stmt"/>
+      <line num="59" count="1" type="stmt"/>
+      <line num="60" count="1" type="stmt"/>
       <line num="64" count="1" type="stmt"/>
     </file>
   </project>
