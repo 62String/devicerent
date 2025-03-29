@@ -15,10 +15,10 @@ module.exports = {
     'utils/**/*.js',
     'server.js',
     '!**/*.test.js',
-    '!**/*.integration.test.js' // 추가 패턴
+    '!**/*.integration.test.js'
   ],
   coverageDirectory: 'tests/coverage',
-  coverageReporters: ['text', 'lcov'],
+  coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
       statements: 0,
@@ -28,5 +28,18 @@ module.exports = {
     }
   },
   verbose: true,
-  reporters: ['default']
+  reporters: [
+    'default',
+    [
+      'jest-html-reporters',
+      {
+        publicPath: 'tests/html-report',
+        filename: 'report.html',
+        expand: true,
+        pageTitle: 'DeviceRentalApi Test Report',
+        includeCoverage: true,
+        openReport: false
+      }
+    ]
+  ]
 };

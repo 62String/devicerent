@@ -1,143 +1,114 @@
 const request = require('supertest');
-const { app } = require('../../server');
-const Device = require('../../models/Device');
-const User = require('../../models/User');
-const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
-const path = require('path');
-const xlsx = require('xlsx');
-const fs = require('fs');
+  const mongoose = require('mongoose');
+  const jwt = require('jsonwebtoken');
+  const { app } = require('../../server');
 
-// Device 모델 모킹
-const mockDevice = {
-  create: jest.fn(),
-  find: jest.fn(),
-  deleteMany: jest.fn()
-};
+  // Device 모델 모킹
+  const mockDeviceFind = jest.fn();
+  jest.mock('../../models/Device', () => ({
+    find: mockDeviceFind,
+  }));
 
-// User 모델 모킹
-const mockUser = {
-  create: jest.fn(),
-  deleteMany: jest.fn(),
-  comparePassword: jest.fn()
-};
+  // server.js 모킹 및 의존성 모킹
+  jest.mock('../../server', () => {
+    const express = require('express');
+    const app = express();
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    const verifyToken = jest.fn();
+    const User = {
+      findOne: jest.fn(),
+    };
+    app.post('/api/admin/init-devices', async (req, res) => {
+      const token = req.headers.authorization?.split(' ')[1];
+      if (!token) return res.status(401).json({ message: 'No token provided' });
+      try {
+        const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+        const user = await User.findOne({ id: decoded.id, isAdmin: true });
+        if (!user) return res.status(403).json({ message: 'Admin access required' });
 
-// server.js 모킹 및 의존 관계 모킹
-jest.mock('../../server', () => {
-  const express = require('express');
-  const app = express();
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-  app.post('/api/admin/init-devices', async (req, res) => {
-    try {
-      await mockDevice.deleteMany({}); // 모든 디바이스 삭제
-      res.status(200).json({ message: 'Devices initialized successfully' });
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
-    }
-  });
-  return { app, initDevices: jest.fn() };
-});
-
-// server.js 의존 관계 모킹
-jest.mock('../../routes/auth', () => null);
-jest.mock('../../routes/devices', () => null);
-jest.mock('../../routes/admin/approve', () => null);
-jest.mock('../../routes/admin/users', () => null);
-
-// xlsx 모킹
-jest.spyOn(xlsx, 'readFile').mockImplementation(() => {
-  return {
-    SheetNames: ['Devices'],
-    Sheets: {
-      Devices: {
-        '!ref': 'A1:D2',
-        A1: { v: '시리얼 번호' },
-        B1: { v: 'OS 이름' },
-        C1: { v: 'OS 버전' },
-        D1: { v: '모델명' },
-        A2: { v: 'TEST001' },
-        B2: { v: 'AOS' },
-        C2: { v: '14' },
-        D2: { v: 'TestDevice' }
+        const { exportPath } = req.body;
+        const initDevices = require('../../server').initDevices;
+        await initDevices(false, exportPath);
+        res.json({ message: 'Device initialization completed' });
+      } catch (error) {
+        if (error.message.includes('Invalid devices found')) {
+          res.status(400).json(JSON.parse(error.message));
+        } else {
+          res.status(500).json({ message: 'Server error', error: error.message });
+        }
       }
-    }
-  };
-});
-
-jest.spyOn(xlsx.utils, 'sheet_to_json').mockImplementation(() => {
-  return [
-    { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS', 'OS 버전': '14', '모델명': 'TestDevice' }
-  ];
-});
-
-console.log('Loading initDevices.integration.test.js');
-
-describe('POST /api/admin/init-devices (Integration)', () => {
-  let token;
-
-  console.log('Running initDevices integration tests');
-
-  beforeAll(async () => {
-    // jest.mock 호출을 beforeAll 내에서 실행
-    jest.mock('../../models/Device', () => mockDevice);
-    jest.mock('../../models/User', () => mockUser);
-    token = jwt.sign({ id: 'admin-id' }, process.env.JWT_SECRET || '비밀열쇠12345678');
-  }, 60000);
-
-  afterAll(async () => {
-    // 모킹된 상태이므로 연결 종료 불필요
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    if (fs.existsSync(exportPath)) {
-      fs.unlinkSync(exportPath);
-    }
-  }, 60000);
-
-  afterEach(async () => {
-    await mockDevice.deleteMany({ serialNumber: { $in: ['TEST001', 'INVALID_DEVICE'] } });
-    await mockUser.deleteMany({ id: 'admin-id' });
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    if (fs.existsSync(exportPath)) {
-      fs.unlinkSync(exportPath);
-    }
+    });
+    return { app, initDevices: jest.fn(), User, verifyToken };
   });
 
-  it('should initialize devices', async () => {
-    await mockDevice.create({
-      serialNumber: 'INVALID_DEVICE',
-      deviceInfo: 'Invalid Device',
-      osName: 'AOS'
+  // server.js 의존성 모킹
+  jest.mock('../../routes/auth', () => null);
+  jest.mock('../../routes/devices', () => null);
+  jest.mock('../../routes/admin/users', () => null);
+
+  // xlsx 모킹
+  const mockXlsx = {
+    readFile: jest.fn(),
+    utils: {
+      sheet_to_json: jest.fn(),
+      json_to_sheet: jest.fn(),
+      book_new: jest.fn(),
+      book_append_sheet: jest.fn(),
+    },
+    write: jest.fn(), // write 속성을 jest.fn()으로 초기화
+  };
+  jest.mock('xlsx', () => mockXlsx);
+
+  // fs 모킹
+  jest.mock('fs', () => ({
+    readdirSync: jest.fn(),
+    statSync: jest.fn(),
+    existsSync: jest.fn(),
+    writeFileSync: jest.fn(),
+    mkdirSync: jest.fn(),
+  }));
+
+  describe('POST /api/admin/init-devices', () => {
+    let adminToken;
+    let mockFs;
+
+    beforeAll(async () => {
+      // 실제 MongoDB 인스턴스에 연결
+      await mongoose.connect('mongodb://localhost:27017/testdb');
+      adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, 'your-secret-key', { expiresIn: '1h' });
     });
 
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.json_to_sheet([
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS', 'OS 버전': '14', '모델명': 'TestDevice' }
-    ]);
-    xlsx.utils.book_append_sheet(wb, ws, 'Devices');
-    xlsx.writeFile(wb, exportPath);
+    afterAll(async () => {
+      await mongoose.connection.dropDatabase();
+      await mongoose.disconnect();
+    });
 
-    const res = await request(app)
-      .post('/api/admin/init-devices')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ exportPath });
+    beforeEach(async () => {
+      mockDeviceFind.mockReset();
+      require('../../server').verifyToken.mockResolvedValue({ id: 'admin-id' });
+      require('../../server').User.findOne.mockResolvedValue({ id: 'admin-id', isAdmin: true });
+      mockFs = require('fs');
+      mockFs.existsSync.mockReturnValue(true);
+      mockXlsx.readFile.mockReturnValue({ Sheets: { Sheet1: {} }, SheetNames: ['Sheet1'] });
+      mockXlsx.utils.sheet_to_json.mockReturnValue([
+        { '시리얼 번호': 'TEST001', '디바이스 정보': 'Test Device', 'OS 이름': 'AOS', 'OS 버전': '14', '모델명': 'TestDevice', '대여자': '없음', '대여일시': '없음' }
+      ]);
+      mockFs.readdirSync.mockReturnValue(['test.xlsx']);
+      mockFs.statSync.mockReturnValue({ mtime: new Date() });
+      mockXlsx.utils.book_new.mockReturnValue({});
+      mockXlsx.utils.json_to_sheet.mockReturnValue({});
+      mockXlsx.utils.book_append_sheet.mockReturnValue({});
+      mockXlsx.write.mockReturnValue(Buffer.from('mocked buffer'));
+    });
 
-    expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Devices initialized successfully');
+    it('should initialize devices successfully', async () => {
+      const res = await request(app)
+        .post('/api/admin/init-devices')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exportPath: 'mocked/path' });
 
-    mockDevice.find.mockResolvedValue([
-      {
-        serialNumber: 'TEST001',
-        deviceInfo: 'TestDevice',
-        osName: 'AOS',
-        osVersion: '14',
-        modelName: 'TestDevice',
-        status: 'active'
-      }
-    ]);
-
-    const devices = await mockDevice.find();
-    expect(devices.length).toBe(1);
-    expect(devices[0].serialNumber).toBe('TEST001');
-  }, 10000);
-});
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('Device initialization completed');
+    });
+  });

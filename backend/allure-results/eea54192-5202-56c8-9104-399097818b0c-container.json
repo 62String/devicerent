@@ -1,0 +1,1 @@
+{"uuid":"eea54192-5202-56c8-9104-399097818b0c","name":"Auth API GET /api/auth/me should fail if no token provided (0)","children":["2a08c4fa-961e-4ed2-8bc6-0d5036b418d0"]}

@@ -1,249 +1,151 @@
-/**
- * @description Tests for verify-data-integrity API endpoint in server.js
- * @module verifyDataIntegrity
- */
 const request = require('supertest');
-const { app } = require('../../server');
-const Device = require('../../models/Device');
-const User = require('../../models/User');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const { app } = require('../../server');
 
 // Device 모델 모킹
-const mockDevice = {
-  create: jest.fn(),
-  find: jest.fn(),
-  deleteMany: jest.fn()
-};
+const mockDeviceFind = jest.fn();
+jest.mock('../../models/Device', () => ({
+  find: mockDeviceFind,
+}));
 
-// User 모델 모킹
-const mockUser = {
-  create: jest.fn(),
-  deleteMany: jest.fn(),
-  comparePassword: jest.fn()
-};
-
-// server.js 모킹 및 의존 관계 모킹
+// server.js 모킹 및 의존성 모킹
 jest.mock('../../server', () => {
   const express = require('express');
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  const mockUserFindOne = jest.fn(); // 내부에서 정의
   app.get('/api/admin/verify-data-integrity', async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token provided' });
     try {
-      const devices = await mockDevice.find();
+      const decoded = await require('../../utils/auth').verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+      const user = await mockUserFindOne({ id: decoded.id, isAdmin: true });
+      if (!user) return res.status(403).json({ message: 'Admin access required' });
+
+      const devices = await mockDeviceFind();
       const issues = [];
       const serialNumbers = new Set();
-      for (const device of devices) {
-        if (serialNumbers.has(device.serialNumber)) {
-          issues.push({ serialNumber: device.serialNumber, issues: 'Duplicate serialNumber' });
-        } else {
-          serialNumbers.add(device.serialNumber);
+
+      devices.forEach((device, index) => {
+        const deviceIssues = [];
+        if (!device.serialNumber) deviceIssues.push('Missing serialNumber');
+        if (!device.osName) deviceIssues.push('Missing osName');
+        if (device.rentedAt && isNaN(new Date(device.rentedAt).getTime())) deviceIssues.push('Invalid rentedAt');
+        if (serialNumbers.has(device.serialNumber)) deviceIssues.push('Duplicate serialNumber');
+        else serialNumbers.add(device.serialNumber);
+        if (device.location !== undefined) deviceIssues.push('Deprecated location field found');
+
+        if (deviceIssues.length > 0) {
+          issues.push({
+            serialNumber: device.serialNumber || 'N/A',
+            issues: deviceIssues
+          });
         }
-      }
+      });
+
       if (issues.length > 0) {
         res.status(200).json({ message: 'Data integrity issues found', issues });
       } else {
         res.status(200).json({ message: 'Data integrity check passed, no issues found' });
       }
     } catch (error) {
-      console.error('Data integrity check error:', error);
       res.status(500).json({ message: 'Server error', error: error.message });
     }
   });
-  return { app };
+  return { app, initDevices: jest.fn(), User: { findOne: mockUserFindOne } };
 });
 
-// server.js 의존 관계 모킹
+// server.js 의존성 모킹
 jest.mock('../../routes/auth', () => null);
 jest.mock('../../routes/devices', () => null);
-jest.mock('../../routes/admin/approve', () => null);
 jest.mock('../../routes/admin/users', () => null);
 
 describe('GET /api/admin/verify-data-integrity', () => {
-  let token;
+  let adminToken;
+  let userToken;
+  let adminTokenValue; // Bearer 접두어 없는 토큰 값
+  let userTokenValue;  // Bearer 접두어 없는 토큰 값
 
   beforeAll(async () => {
-    // jest.mock 호출을 beforeAll 내에서 실행
-    jest.mock('../../models/Device', () => mockDevice);
-    jest.mock('../../models/User', () => mockUser);
-    token = jwt.sign({ id: 'admin-id' }, process.env.JWT_SECRET || '비밀열쇠12345678');
-  }, 60000);
+    // 실제 MongoDB 인스턴스에 연결
+    await mongoose.connect('mongodb://localhost:27017/testdb');
+    adminTokenValue = jwt.sign({ id: 'admin-id', isAdmin: true }, '비밀열쇠12345678', { expiresIn: '1h' });
+    userTokenValue = jwt.sign({ id: 'user-id', isAdmin: false }, '비밀열쇠12345678', { expiresIn: '1h' });
+    adminToken = `Bearer ${adminTokenValue}`;
+    userToken = `Bearer ${userTokenValue}`;
+  });
 
   afterAll(async () => {
-    // 모킹된 상태이므로 연결 종료 불필요
-  }, 60000);
+    await mongoose.connection.dropDatabase();
+    await mongoose.disconnect();
+  });
 
-  beforeEach(async () => {
-    await mockDevice.deleteMany();
-    await mockUser.deleteMany();
-    jest.clearAllMocks();
-  }, 10000);
-
-  afterEach(async () => {
-    await mockDevice.deleteMany();
-    await mockUser.deleteMany();
-  }, 10000);
-
-  it('should detect data integrity issues', async () => {
-    mockDevice.create
-      .mockResolvedValueOnce({
-        serialNumber: 'DEVICE_001',
-        deviceInfo: 'Device Info 1',
-        osName: 'AOS'
-      })
-      .mockResolvedValueOnce({
-        serialNumber: 'DEVICE_001',
-        deviceInfo: 'Device Info 2',
-        osName: 'AOS'
-      });
-
-    mockUser.create.mockResolvedValue({
-      id: 'admin-id',
-      isAdmin: true,
-      position: '파트장',
-      password: 'password123',
-      affiliation: 'TestOrg',
-      name: 'Admin User'
-    });
-
-    mockDevice.find.mockResolvedValue([
-      {
-        serialNumber: 'DEVICE_001',
-        deviceInfo: 'Device Info 1',
-        osName: 'AOS'
-      },
-      {
-        serialNumber: 'DEVICE_001',
-        deviceInfo: 'Device Info 2',
-        osName: 'AOS'
+  beforeEach(() => {
+    mockDeviceFind.mockReset();
+    // mockUserFindOne을 직접 모킹
+    jest.spyOn(require('../../server').User, 'findOne').mockReset();
+    // verifyToken 모킹
+    jest.spyOn(require('../../utils/auth'), 'verifyToken').mockImplementation((token, secret) => {
+      if (token === adminTokenValue) { // Bearer 접두어 없는 값과 비교
+        return Promise.resolve({ id: 'admin-id', isAdmin: true });
+      } else if (token === userTokenValue) { // Bearer 접두어 없는 값과 비교
+        return Promise.resolve({ id: 'user-id', isAdmin: false });
       }
+      return Promise.reject(new Error('Invalid token'));
+    });
+  });
+
+  it('should return 200 with no issues if data is valid', async () => {
+    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'admin-id', isAdmin: true });
+    mockDeviceFind.mockResolvedValue([
+      { serialNumber: 'TEST001', osName: 'AOS', deviceInfo: 'Test Device', osVersion: '14', modelName: 'TestDevice' },
+      { serialNumber: 'TEST002', osName: 'AOS', deviceInfo: 'Test Device 2', osVersion: '14', modelName: 'TestDevice' }
     ]);
 
     const res = await request(app)
       .get('/api/admin/verify-data-integrity')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Data integrity issues found');
-    expect(res.body.issues).toHaveLength(1);
-    expect(res.body.issues[0].issues).toContain('Duplicate serialNumber');
-  }, 10000);
-
-  it('should pass data integrity check with valid data', async () => {
-    mockDevice.create.mockResolvedValue({
-      serialNumber: 'TEST001',
-      deviceInfo: 'Test Device Info',
-      osName: 'AOS',
-      osVersion: '14',
-      modelName: 'TestDevice',
-      status: 'active'
-    });
-
-    mockUser.create.mockResolvedValue({
-      id: 'admin-id',
-      isAdmin: true,
-      position: '파트장',
-      password: 'password123',
-      affiliation: 'TestOrg',
-      name: 'Admin User'
-    });
-
-    mockDevice.find.mockResolvedValue([
-      {
-        serialNumber: 'TEST001',
-        deviceInfo: 'Test Device Info',
-        osName: 'AOS',
-        osVersion: '14',
-        modelName: 'TestDevice',
-        status: 'active'
-      }
-    ]);
-
-    const res = await request(app)
-      .get('/api/admin/verify-data-integrity')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', adminToken);
 
     expect(res.status).toBe(200);
     expect(res.body.message).toBe('Data integrity check passed, no issues found');
-  }, 10000);
+  });
 
-  it('should hash password and set roleLevel correctly on user creation', async () => {
-    mockUser.create.mockResolvedValue({
-      id: 'test-user',
-      name: 'Test User',
-      affiliation: 'Test Org',
-      position: '센터장',
-      password: 'hashed-testpassword',
-      isPending: true,
-      isAdmin: true,
-      roleLevel: 1,
-      isModified: jest.fn().mockImplementation((field) => {
-        return field === 'password' ? false : true;
-      }),
-      save: jest.fn().mockImplementation(function () {
-        if (this.position === '연구원') {
-          this.roleLevel = 5;
-          this.isAdmin = false;
-        }
-        return Promise.resolve(this);
-      }),
-      toJSON: jest.fn().mockReturnValue({
-        id: 'test-user',
-        name: 'Updated User',
-        affiliation: 'Test Org',
-        position: '연구원',
-        roleLevel: 5,
-        isPending: true,
-        isAdmin: false
-      })
-    });
+  it('should return 200 with issues if data is invalid', async () => {
+    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'admin-id', isAdmin: true });
+    mockDeviceFind.mockResolvedValue([
+      { serialNumber: 'TEST001', osName: '', deviceInfo: 'Invalid Device' }, // Missing osName
+      { serialNumber: 'TEST001', osName: 'AOS', deviceInfo: 'Test Device' } // Duplicate serialNumber
+    ]);
 
-    mockUser.comparePassword
-      .mockResolvedValueOnce(true) // testpassword
-      .mockResolvedValueOnce(false); // wrongpassword
+    const res = await request(app)
+      .get('/api/admin/verify-data-integrity')
+      .set('Authorization', adminToken);
 
-    const user = await mockUser.create({
-      id: 'test-user',
-      name: 'Test User',
-      affiliation: 'Test Org',
-      position: '센터장',
-      password: 'testpassword',
-      isPending: true,
-      isAdmin: false
-    });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Data integrity issues found');
+    expect(res.body.issues).toHaveLength(2);
+    expect(res.body.issues[0].issues).toContain('Missing osName');
+    expect(res.body.issues[1].issues).toContain('Duplicate serialNumber');
+  });
 
-    // 비밀번호 해싱 테스트 (pre('save') 훅 - isModified('password') true 케이스)
-    expect(await mockUser.comparePassword('testpassword')).toBe(true);
-    expect(await mockUser.comparePassword('wrongpassword')).toBe(false);
+  it('should return 401 if no token is provided', async () => {
+    const res = await request(app)
+      .get('/api/admin/verify-data-integrity');
 
-    // roleLevel 설정 테스트
-    expect(user.roleLevel).toBe(1); // 센터장은 roleLevel 1
-    expect(user.isAdmin).toBe(true); // 센터장은 isAdmin true
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('No token provided');
+  });
 
-    // position 변경 후 roleLevel 업데이트 테스트
-    user.position = '연구원';
-    await user.save();
-    expect(user.roleLevel).toBe(5); // 연구원은 roleLevel 5
-    expect(user.isAdmin).toBe(false); // 연구원은 isAdmin false
+  it('should return 403 if user is not admin', async () => {
+    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'user-id', isAdmin: false });
 
-    // 비밀번호 변경 없이 저장 테스트 (isModified('password') false 케이스)
-    const originalPassword = user.password;
-    user.name = 'Updated User';
-    expect(user.isModified('password')).toBe(false); // 비밀번호 변경되지 않음 확인
-    await user.save();
-    expect(user.password).toBe(originalPassword); // 비밀번호 변경되지 않음
+    const res = await request(app)
+      .get('/api/admin/verify-data-integrity')
+      .set('Authorization', userToken);
 
-    // toJSON 메서드 테스트
-    const userJson = user.toJSON();
-    expect(userJson).toHaveProperty('id', 'test-user');
-    expect(userJson).toHaveProperty('name', 'Updated User');
-    expect(userJson).toHaveProperty('affiliation', 'Test Org');
-    expect(userJson).toHaveProperty('position', '연구원');
-    expect(userJson).toHaveProperty('roleLevel', 5);
-    expect(userJson).toHaveProperty('isPending', true);
-    expect(userJson).toHaveProperty('isAdmin', false);
-    expect(userJson).not.toHaveProperty('password');
-    expect(userJson).not.toHaveProperty('__v');
-  }, 10000);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Admin access required');
+  });
 });

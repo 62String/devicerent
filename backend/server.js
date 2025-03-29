@@ -33,13 +33,13 @@ app.use((req, res, next) => {
 // 테스트 환경에서 의존성 로드 방지
 const authRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/auth') : null;
 const deviceRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/devices') : null;
-const approveRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/approve') : null;
+//const approveRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/approve') : null;
 const usersRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/users') : null;
 
 if (process.env.NODE_ENV !== 'test') {
   app.use('/api/auth', authRoutes);
   app.use('/api/devices', deviceRoutes);
-  app.use('/api/admin', approveRoutes);
+  //app.use('/api/admin', approveRoutes);
   app.use('/api/admin', usersRoutes);
 }
 
