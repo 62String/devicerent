@@ -9,19 +9,24 @@ jest.mock('../../models/Device', () => ({
   find: mockDeviceFind,
 }));
 
+// User 모델 모킹
+const mockUserFindOne = jest.fn();
+jest.mock('../../models/User', () => ({
+  findOne: mockUserFindOne,
+}));
+
 // server.js 모킹 및 의존성 모킹
 jest.mock('../../server', () => {
   const express = require('express');
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  const mockUserFindOne = jest.fn(); // 내부에서 정의
   app.get('/api/admin/verify-data-integrity', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token provided' });
     try {
       const decoded = await require('../../utils/auth').verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-      const user = await mockUserFindOne({ id: decoded.id, isAdmin: true });
+      const user = await require('../../models/User').findOne({ id: decoded.id, isAdmin: true });
       if (!user) return res.status(403).json({ message: 'Admin access required' });
 
       const devices = await mockDeviceFind();
@@ -54,7 +59,7 @@ jest.mock('../../server', () => {
       res.status(500).json({ message: 'Server error', error: error.message });
     }
   });
-  return { app, initDevices: jest.fn(), User: { findOne: mockUserFindOne } };
+  return { app, initDevices: jest.fn() };
 });
 
 // server.js 의존성 모킹
@@ -84,8 +89,7 @@ describe('GET /api/admin/verify-data-integrity', () => {
 
   beforeEach(() => {
     mockDeviceFind.mockReset();
-    // mockUserFindOne을 직접 모킹
-    jest.spyOn(require('../../server').User, 'findOne').mockReset();
+    mockUserFindOne.mockReset();
     // verifyToken 모킹
     jest.spyOn(require('../../utils/auth'), 'verifyToken').mockImplementation((token, secret) => {
       if (token === adminTokenValue) { // Bearer 접두어 없는 값과 비교
@@ -98,7 +102,7 @@ describe('GET /api/admin/verify-data-integrity', () => {
   });
 
   it('should return 200 with no issues if data is valid', async () => {
-    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'admin-id', isAdmin: true });
+    mockUserFindOne.mockResolvedValue({ id: 'admin-id', isAdmin: true });
     mockDeviceFind.mockResolvedValue([
       { serialNumber: 'TEST001', osName: 'AOS', deviceInfo: 'Test Device', osVersion: '14', modelName: 'TestDevice' },
       { serialNumber: 'TEST002', osName: 'AOS', deviceInfo: 'Test Device 2', osVersion: '14', modelName: 'TestDevice' }
@@ -113,7 +117,7 @@ describe('GET /api/admin/verify-data-integrity', () => {
   });
 
   it('should return 200 with issues if data is invalid', async () => {
-    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'admin-id', isAdmin: true });
+    mockUserFindOne.mockResolvedValue({ id: 'admin-id', isAdmin: true });
     mockDeviceFind.mockResolvedValue([
       { serialNumber: 'TEST001', osName: '', deviceInfo: 'Invalid Device' }, // Missing osName
       { serialNumber: 'TEST001', osName: 'AOS', deviceInfo: 'Test Device' } // Duplicate serialNumber
@@ -139,7 +143,7 @@ describe('GET /api/admin/verify-data-integrity', () => {
   });
 
   it('should return 403 if user is not admin', async () => {
-    jest.spyOn(require('../../server').User, 'findOne').mockResolvedValue({ id: 'user-id', isAdmin: false });
+    mockUserFindOne.mockResolvedValue({ id: 'user-id', isAdmin: false });
 
     const res = await request(app)
       .get('/api/admin/verify-data-integrity')
