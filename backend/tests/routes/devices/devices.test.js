@@ -93,11 +93,10 @@ describe('Devices API', () => {
         .get('/api/devices')
         .set('Authorization', `Bearer ${invalidToken}`);
       expect(res.status).toBe(401); // 실제 로직에 맞게 401로 수정
-      expect(res.body.message).toBe('No token provided'); // 메시지 확인 필요
+      expect(res.body.message).toBe('Invalid token');
     });
   });
 
-  // 나머지 테스트는 동일
   describe('GET /api/devices/available', () => {
     it('should return list of available devices', async () => {
       const res = await request(app)
