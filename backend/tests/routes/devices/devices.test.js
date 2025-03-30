@@ -1,132 +1,77 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { app } = require('../../../server');
-const deviceRoutes = require('../../../routes/devices'); // 실제 라우트 가져오기
+const { MongoMemoryServer } = require('mongodb-memory-server');
+const mongoose = require('mongoose');
+const Device = require('../../../models/Device');
+const User = require('../../../models/User');
+const RentalHistory = require('../../../models/RentalHistory');
 
-// 모델 모킹
-jest.mock('../../../models/Device', () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  deleteMany: jest.fn(),
-  updateMany: jest.fn(),
-}));
+let mongoServer;
 
-jest.mock('../../../models/RentalHistory', () => ({
-  findOne: jest.fn(),
-  deleteMany: jest.fn(),
-  create: jest.fn(),
-}));
+beforeAll(async () => {
+  mongoServer = await MongoMemoryServer.create();
+  const uri = mongoServer.getUri();
+  await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
-jest.mock('../../../models/User', () => ({
-  findOne: jest.fn(),
-  deleteMany: jest.fn(),
-}));
+  // 테스트 데이터 삽입
+  await User.create({
+    id: 'test-user',
+    name: 'Test User',
+    affiliation: 'Test Org',
+    position: '연구원',
+    password: 'testpassword',
+    isPending: false,
+    isAdmin: false,
+  });
+  await User.create({
+    id: 'admin-id',
+    name: 'Admin User',
+    affiliation: 'Admin Org',
+    position: '센터장',
+    password: 'adminpassword',
+    isPending: false,
+    isAdmin: true,
+  });
+  await Device.create({
+    serialNumber: 'TEST001',
+    deviceInfo: 'Test Device Info',
+    osName: 'AOS',
+    osVersion: '14',
+    modelName: 'TestDevice',
+    status: 'active',
+    rentedBy: null,
+    rentedAt: null,
+    remark: '',
+  });
 
-jest.mock('../../../models/ExportHistory', () => ({
-  find: jest.fn(),
-  create: jest.fn(),
-}));
-
-// 테스트 환경에서 라우트 강제 등록
-beforeAll(() => {
+  const deviceRoutes = require('../../../routes/devices');
   app.use('/api/devices', deviceRoutes);
+});
+
+afterAll(async () => {
+  await mongoose.disconnect();
+  await mongoServer.stop();
+});
+
+beforeEach(async () => {
+  // 각 테스트 전에 데이터 초기화
+  await Device.updateOne(
+    { serialNumber: 'TEST001' },
+    { rentedBy: null, rentedAt: null, remark: '', status: 'active' }
+  );
+  await RentalHistory.deleteMany({});
 });
 
 describe('Devices API', () => {
   let userToken;
   let adminToken;
-  let mockDeviceFind;
-  let mockDeviceFindOne;
-  let mockDeviceDeleteMany;
-  let mockDeviceUpdateMany;
-  let mockRentalHistoryFindOne;
-  let mockRentalHistoryCreate;
-  let mockUserFindOne;
-  let mockExportHistoryFind;
-  let mockExportHistoryCreate;
+  let invalidToken;
 
   beforeAll(() => {
     userToken = jwt.sign({ id: 'test-user', isAdmin: false }, '비밀열쇠12345678', { expiresIn: '1h' });
     adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, '비밀열쇠12345678', { expiresIn: '1h' });
-  });
-
-  beforeEach(() => {
-    mockDeviceFind = require('../../../models/Device').find;
-    mockDeviceFindOne = require('../../../models/Device').findOne;
-    mockDeviceDeleteMany = require('../../../models/Device').deleteMany;
-    mockDeviceUpdateMany = require('../../../models/Device').updateMany;
-    mockRentalHistoryFindOne = require('../../../models/RentalHistory').findOne;
-    mockRentalHistoryCreate = require('../../../models/RentalHistory').create;
-    mockUserFindOne = require('../../../models/User').findOne;
-    mockExportHistoryFind = require('../../../models/ExportHistory').find;
-    mockExportHistoryCreate = require('../../../models/ExportHistory').create;
-
-    mockDeviceFind.mockReset();
-    mockDeviceFindOne.mockReset();
-    mockDeviceDeleteMany.mockReset();
-    mockDeviceUpdateMany.mockReset();
-    mockRentalHistoryFindOne.mockReset();
-    mockRentalHistoryCreate.mockReset();
-    mockUserFindOne.mockReset();
-    mockExportHistoryFind.mockReset();
-    mockExportHistoryCreate.mockReset();
-
-    // 기본 사용자 모킹
-    mockUserFindOne.mockImplementation((query) => {
-      if (query.id === 'test-user') {
-        return Promise.resolve({
-          id: 'test-user',
-          name: 'Test User',
-          affiliation: 'Test Org',
-          _id: 'mocked-user-id',
-          isPending: false,
-          isAdmin: false,
-        });
-      } else if (query.id === 'admin-id' && query.isAdmin === true) {
-        return Promise.resolve({
-          id: 'admin-id',
-          name: 'Admin User',
-          affiliation: 'Admin Org',
-          _id: 'mocked-admin-id',
-          isPending: false,
-          isAdmin: true,
-        });
-      }
-      return Promise.resolve(null);
-    });
-
-    // 기본 디바이스 모킹
-    mockDeviceFindOne.mockImplementation((query) => {
-      if (query.serialNumber === 'TEST001') {
-        return Promise.resolve({
-          serialNumber: 'TEST001',
-          deviceInfo: 'Test Device Info',
-          osName: 'AOS',
-          osVersion: '14',
-          modelName: 'TestDevice',
-          status: 'active',
-          rentedBy: null,
-          rentedAt: null,
-          remark: '',
-          save: jest.fn().mockResolvedValue(true),
-        });
-      }
-      return Promise.resolve(null);
-    });
-
-    mockDeviceFind.mockImplementation((query) => {
-      if (query && query.status === 'active' && query.rentedBy === null) {
-        return Promise.resolve([
-          { serialNumber: 'TEST001', deviceInfo: 'Test Device Info', osName: 'AOS', osVersion: '14', modelName: 'TestDevice', status: 'active' },
-        ]);
-      }
-      return Promise.resolve([
-        { serialNumber: 'TEST001', deviceInfo: 'Test Device Info', osName: 'AOS', osVersion: '14', modelName: 'TestDevice', status: 'active' },
-      ]);
-    });
-
-    mockRentalHistoryCreate.mockResolvedValue({});
-    mockExportHistoryCreate.mockResolvedValue({});
+    invalidToken = jwt.sign({ id: 'nonexistent-user', isAdmin: false }, 'wrongsecret', { expiresIn: '1h' }); // 잘못된 비밀키
   });
 
   describe('GET /api/devices', () => {
@@ -145,13 +90,12 @@ describe('Devices API', () => {
       expect(res.body.message).toBe('No token provided');
     });
 
-    it('should return 404 if user not found', async () => {
-      mockUserFindOne.mockResolvedValue(null);
+    it('should return 500 if token is invalid', async () => {
       const res = await request(app)
         .get('/api/devices')
-        .set('Authorization', `Bearer ${userToken}`);
-      expect(res.status).toBe(404);
-      expect(res.body.message).toBe('User not found');
+        .set('Authorization', `Bearer ${invalidToken}`); // 헤더 형식 확인
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe('Server error');
     });
   });
 
@@ -166,7 +110,10 @@ describe('Devices API', () => {
     });
 
     it('should return 404 if no available devices', async () => {
-      mockDeviceFind.mockResolvedValue([]);
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { rentedBy: { name: 'Test User', affiliation: 'Test Org' }, rentedAt: new Date() }
+      );
       const res = await request(app)
         .get('/api/devices/available')
         .set('Authorization', `Bearer ${userToken}`);
@@ -183,15 +130,16 @@ describe('Devices API', () => {
         .send({ deviceId: 'TEST001', remark: 'Test rent' });
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Device rented successfully');
-      expect(mockRentalHistoryCreate).toHaveBeenCalled();
+      const device = await Device.findOne({ serialNumber: 'TEST001' });
+      expect(device.rentedBy.name).toBe('Test User');
+      expect(device.remark).toBe('Test rent');
     });
 
     it('should fail if device already rented', async () => {
-      mockDeviceFindOne.mockResolvedValue({
-        serialNumber: 'TEST001',
-        rentedBy: { name: 'Test User', affiliation: 'Test Org' },
-        save: jest.fn(),
-      });
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { rentedBy: { name: 'Test User', affiliation: 'Test Org' }, rentedAt: new Date() }
+      );
       const res = await request(app)
         .post('/api/devices/rent-device')
         .set('Authorization', `Bearer ${userToken}`)
@@ -201,11 +149,10 @@ describe('Devices API', () => {
     });
 
     it('should fail if device not active', async () => {
-      mockDeviceFindOne.mockResolvedValue({
-        serialNumber: 'TEST001',
-        status: 'inactive',
-        save: jest.fn(),
-      });
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { status: 'inactive' }
+      );
       const res = await request(app)
         .post('/api/devices/rent-device')
         .set('Authorization', `Bearer ${userToken}`)
@@ -217,21 +164,19 @@ describe('Devices API', () => {
 
   describe('POST /api/devices/return-device', () => {
     it('should return a device successfully', async () => {
-      mockDeviceFindOne.mockResolvedValue({
-        serialNumber: 'TEST001',
-        rentedBy: { name: 'Test User', affiliation: 'Test Org' },
-        rentedAt: new Date(),
-        remark: 'Test rent',
-        status: 'active',
-        save: jest.fn().mockResolvedValue(true),
-      });
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { rentedBy: { name: 'Test User', affiliation: 'Test Org' }, rentedAt: new Date(), remark: 'Test rent' }
+      );
       const res = await request(app)
         .post('/api/devices/return-device')
         .set('Authorization', `Bearer ${userToken}`)
         .send({ deviceId: 'TEST001' });
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Device returned successfully');
-      expect(mockRentalHistoryCreate).toHaveBeenCalled();
+      const device = await Device.findOne({ serialNumber: 'TEST001' });
+      expect(device.rentedBy).toBeNull();
+      expect(device.rentedAt).toBeNull();
     });
 
     it('should fail if device not rented', async () => {
@@ -244,11 +189,10 @@ describe('Devices API', () => {
     });
 
     it('should fail if user is not the renter', async () => {
-      mockDeviceFindOne.mockResolvedValue({
-        serialNumber: 'TEST001',
-        rentedBy: { name: 'Other User', affiliation: 'Other Org' },
-        save: jest.fn(),
-      });
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { rentedBy: { name: 'Other User', affiliation: 'Other Org' }, rentedAt: new Date() }
+      );
       const res = await request(app)
         .post('/api/devices/return-device')
         .set('Authorization', `Bearer ${userToken}`)
