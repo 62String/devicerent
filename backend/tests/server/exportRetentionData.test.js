@@ -3,11 +3,10 @@ const RentalHistory = require('../../models/RentalHistory');
 const Device = require('../../models/Device');
 const ExportHistory = require('../../models/ExportHistory');
 const fs = require('fs');
+const xlsx = require('xlsx');
 
-// server.js에서 exportRetentionData만 가져오기
 const { exportRetentionData } = jest.requireActual('../../server');
 
-// fs 모킹
 jest.mock('fs', () => ({
   existsSync: jest.fn().mockReturnValue(true),
   mkdirSync: jest.fn(),
@@ -15,39 +14,24 @@ jest.mock('fs', () => ({
   readFileSync: jest.fn().mockReturnValue(''),
 }));
 
-// User.js 모킹 (bcrypt 우회)
-jest.mock('../../models/User', () => {
-  const mockUserSchema = {
-    pre: jest.fn(),
-    methods: {
-      comparePassword: jest.fn().mockResolvedValue(true),
-    },
-    set: jest.fn(),
-  };
-  const mockUser = jest.fn(() => ({
-    find: jest.fn(),
-    findOne: jest.fn(),
-    findOneAndUpdate: jest.fn(),
-    findOneAndDelete: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    isModified: jest.fn().mockReturnValue(false),
-    position: '연구원',
-    roleLevel: 5,
-    isAdmin: false,
-  }));
-  mockUser.find = jest.fn();
-  mockUser.findOne = jest.fn();
-  mockUser.findOneAndUpdate = jest.fn();
-  mockUser.findOneAndDelete = jest.fn();
-  mockUser.create = jest.fn();
-  mockUser.schema = mockUserSchema;
-  return mockUser;
-});
+jest.mock('xlsx', () => ({
+  utils: {
+    book_new: jest.fn().mockReturnValue({}),
+    json_to_sheet: jest.fn().mockReturnValue({}),
+    book_append_sheet: jest.fn(),
+  },
+  write: jest.fn().mockReturnValue(Buffer.from('mocked buffer')),
+}));
+
+jest.mock('../../models/User', () => ({
+  findOne: jest.fn(),
+}));
 
 describe('exportRetentionData', () => {
+  let connection;
+
   beforeAll(async () => {
-    await mongoose.connect('mongodb://localhost:27017/devicerent-test', {
+    connection = await mongoose.connect('mongodb://localhost:27017/devicerent-test', {
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 60000,
       connectTimeoutMS: 60000,
@@ -55,15 +39,15 @@ describe('exportRetentionData', () => {
   });
 
   afterAll(async () => {
-    await mongoose.connection.dropDatabase(); // mongoose.connection 사용
-    await mongoose.connection.close(); // 연결 완전 종료
+    await mongoose.connection.dropDatabase();
+    await mongoose.connection.close();
   });
 
   beforeEach(async () => {
     await RentalHistory.deleteMany({});
     await Device.deleteMany({});
     await ExportHistory.deleteMany({});
-    fs.writeFileSync.mockClear();
+    fs.writeFileSync.mockReset();
   });
 
   it('should export and delete retention data older than 2 years', async () => {
@@ -72,9 +56,9 @@ describe('exportRetentionData', () => {
       serialNumber: 'TEST001',
       timestamp: twoYearsAgo,
       action: 'rent',
-      userId: 'user123', // 필수 필드 추가
-      userDetails: { name: 'Test User', affiliation: 'Test Dept' }, // affiliation 추가
-      deviceInfo: { modelName: 'TestDevice', osName: 'AOS', osVersion: '14' }, // osName, osVersion 확인
+      userId: 'user123',
+      userDetails: { name: 'Test User', affiliation: 'Test Dept' },
+      deviceInfo: { modelName: 'TestDevice', osName: 'AOS', osVersion: '14' },
     });
 
     await exportRetentionData();
@@ -102,12 +86,12 @@ describe('exportRetentionData', () => {
       serialNumber: 'TEST001',
       timestamp: twoYearsAgo,
       action: 'rent',
-      userId: 'user123', // 필수 필드 추가
-      userDetails: { name: 'Test User', affiliation: 'Test Dept' }, // affiliation 추가
-      deviceInfo: { modelName: 'TestDevice', osName: 'AOS', osVersion: '14' }, // osName, osVersion 추가
+      userId: 'user123',
+      userDetails: { name: 'Test User', affiliation: 'Test Dept' },
+      deviceInfo: { modelName: 'TestDevice', osName: 'AOS', osVersion: '14' },
     });
 
-    fs.writeFileSync.mockImplementation(() => { throw new Error('Write failed'); });
+    fs.writeFileSync.mockImplementationOnce(() => { throw new Error('Write failed'); });
 
     await expect(exportRetentionData()).rejects.toThrow('Failed to save export file');
   });

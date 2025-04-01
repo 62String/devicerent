@@ -1,49 +1,132 @@
-jest.mock('../../server', () => ({
-  initDevices: jest.fn()
+const mongoose = require('mongoose');
+const Device = require('../../models/Device');
+const fs = require('fs');
+const xlsx = require('xlsx');
+
+const { initDevices } = jest.requireActual('../../server');
+
+jest.mock('fs', () => ({
+  existsSync: jest.fn(),
+  mkdirSync: jest.fn(),
+  writeFileSync: jest.fn(),
+  readFileSync: jest.fn().mockReturnValue(''),
+  readdirSync: jest.fn(),
+  statSync: jest.fn().mockReturnValue({ mtime: new Date() }),
 }));
 
-const { initDevices } = require('../../server');
-const path = require('path');
-const xlsx = require('xlsx');
-const fs = require('fs');
+jest.mock('xlsx', () => ({
+  readFile: jest.fn(),
+  utils: {
+    sheet_to_json: jest.fn(),
+    book_new: jest.fn().mockReturnValue({}),
+    json_to_sheet: jest.fn().mockReturnValue({}),
+    book_append_sheet: jest.fn(),
+  },
+  write: jest.fn().mockReturnValue(Buffer.from('mocked buffer')),
+}));
 
-// xlsx.writeFile 모킹
-jest.spyOn(xlsx, 'writeFile').mockImplementation(() => {});
+jest.mock('../../models/User', () => ({
+  findOne: jest.fn(),
+}));
 
 describe('initDevices', () => {
-  it('should throw error if invalid devices are found', async () => {
-    initDevices.mockRejectedValue(new Error('Invalid devices found'));
-    await expect(initDevices()).rejects.toThrow('Invalid devices found');
+  let connection;
+
+  beforeAll(async () => {
+    connection = await mongoose.connect('mongodb://localhost:27017/devicerent-test', {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 60000,
+    });
   });
 
-  it('should import devices successfully from Excel file', async () => {
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.json_to_sheet([
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS', 'OS 버전': '14', '모델명': 'TestDevice' }
-    ]);
-    xlsx.utils.book_append_sheet(wb, ws, 'Devices');
-    xlsx.writeFile(wb, exportPath);
-
-    initDevices.mockResolvedValue([{ serialNumber: 'TEST001', osName: 'AOS' }]);
-    const result = await initDevices(false, exportPath);
-    expect(result).toEqual([{ serialNumber: 'TEST001', osName: 'AOS' }]);
+  afterAll(async () => {
+    await mongoose.connection.dropDatabase();
+    await mongoose.connection.close();
   });
 
-  it('should throw error if Excel file contains invalid data', async () => {
-    const exportPath = path.join(__dirname, 'test.xlsx');
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.json_to_sheet([
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS' },
-      { '시리얼 번호': '', 'OS 이름': 'AOS' },
-      { '시리얼 번호': 'TEST003', 'OS 이름': 'AOS', '대여일시': 'invalid-date' },
-      { '시리얼 번호': 'TEST001', 'OS 이름': 'AOS' },
-      { '시리얼 번호': 'TEST004', 'OS 이름': 'AOS', 'location': 'OldField' }
-    ]);
-    xlsx.utils.book_append_sheet(wb, ws, 'Devices');
-    xlsx.writeFile(wb, exportPath);
+  beforeEach(async () => {
+    await Device.deleteMany({});
+    fs.writeFileSync.mockReset();
+    fs.existsSync.mockReturnValue(true);
+    fs.readdirSync.mockReturnValue(['test.xlsx']);
+    xlsx.readFile.mockReturnValue({ Sheets: { Sheet1: {} }, SheetNames: ['Sheet1'] });
+    xlsx.utils.sheet_to_json.mockClear();
+  });
 
-    initDevices.mockRejectedValue(new Error('Invalid devices found'));
-    await expect(initDevices(false, exportPath)).rejects.toThrow('Invalid devices found');
+  it('should initialize devices from excel file', async () => {
+    const mockDevices = [
+      {
+        '시리얼 번호': 'TEST001',
+        '디바이스 정보': 'Test Device',
+        '모델명': 'TestDevice',
+        'OS 이름': 'AOS',
+        'OS 버전': '14',
+        '대여자': '없음',
+        '대여일시': '없음',
+      },
+    ];
+    xlsx.utils.sheet_to_json.mockReturnValue(mockDevices);
+    await Device.create({
+      serialNumber: 'EXISTING001',
+      deviceInfo: 'Existing Device',
+      osName: 'AOS',
+      osVersion: '14',
+      modelName: 'ExistingModel',
+      status: 'active',
+    });
+
+    await initDevices(false);
+
+    const devices = await Device.find({ serialNumber: 'TEST001' });
+    expect(devices.length).toBe(1);
+    expect(devices[0].serialNumber).toBe('TEST001');
+    expect(fs.writeFileSync).toHaveBeenCalled();
+  });
+
+  it('should skip invalid devices from excel file and insert none', async () => {
+    const mockInvalidDevices = [
+      { '시리얼 번호': '', '디바이스 정보': 'Invalid Device', 'OS 이름': 'AOS', 'OS 버전': '14' },
+    ];
+    xlsx.utils.sheet_to_json.mockReturnValue(mockInvalidDevices);
+
+    await initDevices(false);
+
+    const devices = await Device.find();
+    expect(devices.length).toBe(0);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('should throw error if existing devices are invalid', async () => {
+    await Device.create([
+      {
+        serialNumber: 'DUPE001',
+        deviceInfo: 'Device 1',
+        osName: 'AOS',
+        osVersion: '14',
+        modelName: 'Model1',
+        status: 'active',
+      },
+      {
+        serialNumber: 'DUPE001',
+        deviceInfo: 'Device 2',
+        osName: 'AOS',
+        osVersion: '14',
+        modelName: 'Model2',
+        status: 'active',
+      },
+    ]);
+
+    await expect(initDevices(false)).rejects.toThrow(/Invalid devices found/);
+  });
+
+  it('should do nothing if no excel files exist', async () => {
+    fs.readdirSync.mockReturnValue([]);
+
+    await initDevices(false);
+
+    const devices = await Device.find();
+    expect(devices.length).toBe(0);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 });
