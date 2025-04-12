@@ -36,9 +36,17 @@ describe('exportRetentionData', () => {
       socketTimeoutMS: 60000,
       connectTimeoutMS: 60000,
     });
+    // 통합 테스트 실행 전 DB 초기화
+    await RentalHistory.deleteMany({});
+    await Device.deleteMany({});
+    await ExportHistory.deleteMany({});
   });
 
   afterAll(async () => {
+    // 테스트 종료 후 DB 정리
+    await RentalHistory.deleteMany({});
+    await Device.deleteMany({});
+    await ExportHistory.deleteMany({});
     await mongoose.connection.dropDatabase();
     await mongoose.connection.close();
   });
