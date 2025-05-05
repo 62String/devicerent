@@ -57,7 +57,7 @@ router.post('/history/exports/log', adminAuth, async (req, res) => {
       deletedCount: 0,
       performedBy: (await User.findOne({ id: jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET).id })).name || 'Unknown',
       action: action,
-      exportType: exportType || 'unknown' // 유형 추가
+      exportType: exportType || 'unknown'
     });
     res.status(200).json({ message: `${action} log recorded` });
   } catch (error) {
@@ -194,7 +194,7 @@ router.post('/history/export-retention', adminAuth, async (req, res) => {
       deletedCount: deleteResult.deletedCount,
       performedBy,
       action: 'export-retention',
-      exportType: 'retention' // 리텐션 유형 추가
+      exportType: 'retention'
     });
 
     res.status(200).json({ message: '2년 초과 데이터 익스포트 및 삭제 완료', filePath: `${apiUrl}/exports/${fileName}` });
@@ -280,7 +280,7 @@ router.post('/history/export', async (req, res) => {
       deletedCount: 0,
       performedBy: 'system',
       action: 'export',
-      exportType: 'history' // 히스토리 유형 추가
+      exportType: 'history'
     });
 
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
@@ -325,7 +325,7 @@ router.post('/export', adminAuth, async (req, res) => {
       deletedCount: 0,
       performedBy: (await User.findOne({ id: jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET).id })).name || 'Unknown',
       action: 'export',
-      exportType: 'device' // 디바이스 유형 추가
+      exportType: 'device'
     });
 
     // 파일 반환
@@ -502,6 +502,7 @@ router.post('/rent-device', async (req, res) => {
       osVersion: device.osVersion
     };
     const historyData = {
+      deviceId: device._id, // 추가
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
@@ -556,6 +557,7 @@ router.post('/return-device', async (req, res) => {
     };
     console.log('Device info for return:', deviceInfo);
     const historyData = {
+      deviceId: device._id, // 추가
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'return',

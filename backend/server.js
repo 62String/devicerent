@@ -114,7 +114,9 @@ const initDevices = async (force = false, exportPath = null) => {
       workbook = xlsx.readFile(exportPath);
       importFilePath = exportPath;
     } else {
+      log('EXPORT_DIR path:', EXPORT_DIR);
       const files = fs.readdirSync(EXPORT_DIR).filter(file => file.endsWith('.xlsx'));
+      log('Files found in EXPORT_DIR:', files);
       if (files.length === 0) {
         log('Warning: No Excel files found in directory:', EXPORT_DIR);
         log('Available files:', fs.readdirSync(EXPORT_DIR));
@@ -129,8 +131,11 @@ const initDevices = async (force = false, exportPath = null) => {
       })) {
         const tempPath = path.join(EXPORT_DIR, file);
         const tempWorkbook = xlsx.readFile(tempPath);
+        log('Reading file:', tempPath);
+        log('Sheet names:', tempWorkbook.SheetNames);
         const tempSheet = tempWorkbook.Sheets[tempWorkbook.SheetNames[0]];
         const tempRawDevices = xlsx.utils.sheet_to_json(tempSheet);
+        log('Devices in file:', tempRawDevices);
         if (tempRawDevices && tempRawDevices.length > 0) {
           selectedFile = file;
           break;
@@ -150,11 +155,26 @@ const initDevices = async (force = false, exportPath = null) => {
     }
 
     sheet = workbook.Sheets[workbook.SheetNames[0]];
-    rawDevices = xlsx.utils.sheet_to_json(sheet);
+    log('Available sheet names:', workbook.SheetNames);
+    const androidSheet = workbook.Sheets[workbook.SheetNames[0]]; // 안드로이드 시트
+    const iosSheet = workbook.Sheets[workbook.SheetNames[1]]; // iOS 시트
+    if (!androidSheet) log('Error: Android sheet not found');
+    if (!iosSheet) log('Error: iOS sheet not found');
+    const androidDevices = xlsx.utils.sheet_to_json(androidSheet, { header: ['번호', '식별번호', '기기명', 'Chipset', 'CPU', 'GPU', 'Memory', 'Bluetooth', '화면크기', '해상도', 'OS버전'] }).slice(1).map(device => ({ ...device, sheetIndex: 0 }));
+    const iosDevices = xlsx.utils.sheet_to_json(iosSheet, { header: ['번호', '식별번호', '기기명', 'Chipset', 'CPU', 'GPU', 'Memory', 'Bluetooth', '화면크기', '해상도', 'OS버전'] }).slice(1).map(device => ({ ...device, sheetIndex: 1 }));
+    log('Android devices:', androidDevices);
+    log('iOS devices:', iosDevices);
+    rawDevices = [...androidDevices, ...iosDevices];
+    log('Combined devices:', rawDevices);
     if (!rawDevices || rawDevices.length === 0) {
       log('No devices found in Excel file:', importFilePath);
       return;
     }
+
+    // MongoDB에서 기존 serialNumber 목록 조회
+    const existingDevices = await Device.find({}, 'serialNumber');
+    const existingSerialNumbers = new Set(existingDevices.map(device => device.serialNumber));
+    log('Existing serial numbers in MongoDB:', Array.from(existingSerialNumbers));
 
     const devicesToInsert = [];
     const invalidNewDevices = [];
@@ -163,20 +183,20 @@ const initDevices = async (force = false, exportPath = null) => {
     rawDevices.forEach((device, index) => {
       log(`Processing device at index ${index}:`, device);
       const issues = [];
-      if (!device['시리얼 번호']) issues.push('Missing serialNumber');
-      if (!device['OS 이름']) issues.push('Missing osName');
+      if (!device['식별번호']) issues.push('Missing serialNumber');
       if (device['대여일시'] && device['대여일시'] !== '없음') {
         const dateStr = device['대여일시'].replace('오후', 'PM').replace('오전', 'AM');
         if (isNaN(new Date(dateStr).getTime())) {
           issues.push('Invalid rentedAt');
         }
       }
-      if (newSerialNumbers.has(device['시리얼 번호'])) issues.push('Duplicate serialNumber');
-      else newSerialNumbers.add(device['시리얼 번호']);
+      if (existingSerialNumbers.has(device['식별번호'])) issues.push('Duplicate serialNumber in MongoDB');
+      if (newSerialNumbers.has(device['식별번호'])) issues.push('Duplicate serialNumber in Excel');
+      else newSerialNumbers.add(device['식별번호']);
       if (device['location'] !== undefined) issues.push('Deprecated location field found');
 
       if (issues.length > 0) {
-        invalidNewDevices.push({ index, serialNumber: device['시리얼 번호'] || 'N/A', issues });
+        invalidNewDevices.push({ index, serialNumber: device['식별번호'] || 'N/A', issues });
         return;
       }
 
@@ -190,14 +210,16 @@ const initDevices = async (force = false, exportPath = null) => {
       }
 
       const newDevice = {
-        serialNumber: device['시리얼 번호'],
-        deviceInfo: device['디바이스 정보'] || device['모델명'] || 'N/A',
-        osName: device['OS 이름'],
-        osVersion: device['OS 버전'] || '',
-        modelName: device['모델명'] || '',
+        serialNumber: device['식별번호'],
+        deviceInfo: device['기기명'] || 'N/A',
+        osName: device.sheetIndex === 0 ? 'Android' : 'iOS',
+        osVersion: device['OS버전'] || 'N/A', // 수정
+        modelName: device['기기명'] || 'N/A',
         status: 'active',
-        rentedBy: device['대여자'] && device['대여자'] !== '없음' ? { name: device['대여자'].split(' (')[0], affiliation: device['대여자'].split(' (')[1]?.replace(')', '') || '' } : null,
-        rentedAt: rentedAt,
+        rentedBy: null,
+        rentedAt: null,
+        remark: '',
+        specialRemark: '' // 추가
       };
 
       devicesToInsert.push(newDevice);
