@@ -162,19 +162,26 @@ const DeviceStatus = () => {
           </div>
         )}
         {showRemarkModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="bg-white p-4 rounded-lg shadow-lg w-96 text-center">
-              <h3 className="text-lg font-semibold mb-2 text-gray-800">특이사항</h3>
-              <p className="mb-4 whitespace-pre-wrap text-gray-600">{selectedRemark}</p>
-              <button
-                onClick={closeRemarkModal}
-                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        )}
+  <div style={{
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+    justifyContent: 'center', alignItems: 'center'
+  }}>
+    <div style={{
+      backgroundColor: 'white', padding: '20px', borderRadius: '5px',
+      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
+    }}>
+      <h3>특이사항</h3>
+      <p style={{ margin: '20px 0', whiteSpace: 'pre-wrap' }}>{selectedRemark}</p>
+      <button
+        onClick={closeRemarkModal}
+        style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+      >
+        닫기
+      </button>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );
