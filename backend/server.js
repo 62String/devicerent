@@ -529,6 +529,7 @@ app.get('/api/me', async (req, res) => {
         id: user.id,
         name: user.name,
         affiliation: user.affiliation,
+        position: user.position, // 추가
         isPending: user.isPending || false,
         isAdmin: user.isAdmin || false,
       },
