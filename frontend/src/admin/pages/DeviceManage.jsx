@@ -26,7 +26,7 @@ const DeviceManage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
-  const devicesPerPage = 50; // 50개로 변경
+  const devicesPerPage = 50;
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -284,7 +284,6 @@ const DeviceManage = () => {
             {user.isAdmin && (
               <>
                 <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">관리자 페이지</button>
-                
                 <button onClick={() => navigate('/devices/manage')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">디바이스 관리</button>
               </>
             )}
@@ -376,7 +375,7 @@ const DeviceManage = () => {
             <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
               <thead>
                 <tr className="bg-blue-50">
-                  {['시리얼 번호', '모델명', 'OS 이름', 'OS 버전', '대여자', '대여일시', '액션'].map((header) => (
+                  {['시리얼 번호', '모델명', 'OS 이름', 'OS 버전', '대여자', '대여일시', '상태', '상태 변경 사유', '액션'].map((header) => (
                     <th
                       key={header}
                       className="border border-gray-200 p-2 text-left font-medium text-gray-700 cursor-pointer"
@@ -407,6 +406,8 @@ const DeviceManage = () => {
                     <td className="border border-gray-200 p-2 whitespace-normal">
                       {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
                     </td>
+                    <td className="border border-gray-200 p-2 whitespace-normal">{device.status || 'N/A'}</td>
+                    <td className="border border-gray-200 p-2 whitespace-normal">{device.statusReason || '없음'}</td>
                     <td className="border border-gray-200 p-2">
                       <button
                         onClick={() => openDeleteModal(device.serialNumber)}

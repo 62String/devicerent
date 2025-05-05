@@ -4,6 +4,7 @@ const Device = require('../models/Device');
 const ExportHistory = require('../models/ExportHistory');
 const User = require('../models/User');
 const RentalHistory = require('../models/RentalHistory');
+const DeviceStatusHistory = require('../models/DeviceStatusHistory');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { adminAuth } = require('./middleware');
@@ -396,7 +397,7 @@ router.post('/manage/register', adminAuth, async (req, res) => {
     await device.save();
     res.json({ message: "Device registered successfully", device });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -407,21 +408,52 @@ router.post('/manage/delete', adminAuth, async (req, res) => {
     if (!device) return res.status(404).json({ message: "Device not found" });
     res.json({ message: "Device deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-router.post('/manage/update-status', adminAuth, async (req, res) => {
-  const { serialNumber, status, statusReason = '' } = req.body;
+router.post('/manage/update-status', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: "No token provided" });
+
   try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { serialNumber, status, statusReason = '' } = req.body;
+
+    // status 값 유효성 검사
+    const validStatuses = ['active', 'repair', 'inactive'];
+    const normalizedStatus = status ? status.toLowerCase() : '';
+    if (!validStatuses.includes(normalizedStatus)) {
+      return res.status(400).json({ message: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
     const device = await Device.findOne({ serialNumber });
     if (!device) return res.status(404).json({ message: "Device not found" });
-    device.status = status;
+
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // 상태 변경 기록 저장
+    await DeviceStatusHistory.create({
+      serialNumber: device.serialNumber,
+      modelName: device.modelName,
+      osName: device.osName,
+      osVersion: device.osVersion,
+      status: normalizedStatus,
+      statusReason: statusReason,
+      performedBy: user.name || 'Unknown'
+    });
+
+    device.status = normalizedStatus;
     device.statusReason = statusReason;
     await device.save();
     res.json({ message: "Device status updated successfully", device });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error('Error updating device status:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -441,7 +473,7 @@ router.get('/', async (req, res) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -461,7 +493,7 @@ router.get('/available', async (req, res) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ message: "Invalid token" });
     }
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -502,7 +534,7 @@ router.post('/rent-device', async (req, res) => {
       osVersion: device.osVersion
     };
     const historyData = {
-      deviceId: device._id, // 추가
+      deviceId: device._id,
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
@@ -550,6 +582,13 @@ router.post('/return-device', async (req, res) => {
       return res.status(403).json({ message: "Cannot return this device" });
     }
 
+    // status 값 유효성 검사
+    const validStatuses = ['active', 'repair', 'inactive'];
+    const normalizedStatus = status ? status.toLowerCase() : 'active';
+    if (!validStatuses.includes(normalizedStatus)) {
+      return res.status(400).json({ message: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
     const deviceInfo = {
       modelName: device.modelName,
       osName: device.osName,
@@ -557,7 +596,7 @@ router.post('/return-device', async (req, res) => {
     };
     console.log('Device info for return:', deviceInfo);
     const historyData = {
-      deviceId: device._id, // 추가
+      deviceId: device._id,
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'return',
@@ -568,9 +607,21 @@ router.post('/return-device', async (req, res) => {
     console.log('History data to save:', historyData);
     const historyResult = await RentalHistory.create(historyData);
     console.log('Saved history:', historyResult);
+
+    // 상태 변경 기록 저장
+    await DeviceStatusHistory.create({
+      serialNumber: device.serialNumber,
+      modelName: device.modelName,
+      osName: device.osName,
+      osVersion: device.osVersion,
+      status: normalizedStatus,
+      statusReason: statusReason,
+      performedBy: user.name || 'Unknown'
+    });
+
     device.rentedBy = null;
     device.rentedAt = null;
-    device.status = status;
+    device.status = normalizedStatus;
     device.statusReason = statusReason;
     await device.save();
     res.json({ message: "Device returned successfully" });

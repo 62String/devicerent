@@ -9,6 +9,7 @@ import { saveAs } from 'file-saver';
 function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
   const [originalPairs, setOriginalPairs] = useState([]);
+  const [devices, setDevices] = useState([]); // 디바이스 상태 저장
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
   const [showRemarkModal, setShowRemarkModal] = useState(false);
@@ -22,6 +23,19 @@ function DeviceHistory() {
 
   useEffect(() => {
     let isMounted = true;
+
+    const fetchDevices = async () => {
+      try {
+        const response = await axios.get(`${apiUrl}/api/devices`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (isMounted) {
+          setDevices(response.data);
+        }
+      } catch (err) {
+        console.error('Error fetching devices:', err);
+      }
+    };
 
     const fetchData = async () => {
       try {
@@ -70,6 +84,7 @@ function DeviceHistory() {
               rent.serialNumber === record.serialNumber && !rent.matched
             );
             console.log('Matching rent for return:', matchingRent);
+            const device = devices.find(d => d.serialNumber === record.serialNumber);
             if (matchingRent) {
               pairs.push({
                 serialNumber: record.serialNumber,
@@ -79,7 +94,9 @@ function DeviceHistory() {
                 userDetails: record.userDetails?.name || matchingRent.userDetails?.name || '알 수 없음',
                 rentTime: new Date(matchingRent.timestamp).toLocaleString(),
                 returnTime: new Date(record.timestamp).toLocaleString(),
-                remark: matchingRent.remark || ''
+                remark: matchingRent.remark || '',
+                status: device?.status || 'N/A', // 디바이스 상태 추가
+                statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
               });
               matchingRent.matched = true;
             } else {
@@ -91,7 +108,9 @@ function DeviceHistory() {
                 userDetails: record.userDetails?.name || '알 수 없음',
                 rentTime: 'N/A',
                 returnTime: new Date(record.timestamp).toLocaleString(),
-                remark: ''
+                remark: '',
+                status: device?.status || 'N/A', // 디바이스 상태 추가
+                statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
               });
             }
           }
@@ -99,6 +118,7 @@ function DeviceHistory() {
 
         rentRecords.forEach(rent => {
           if (!rent.matched) {
+            const device = devices.find(d => d.serialNumber === rent.serialNumber);
             pairs.push({
               serialNumber: rent.serialNumber,
               modelName: rent.deviceInfo?.modelName || 'N/A',
@@ -107,7 +127,9 @@ function DeviceHistory() {
               userDetails: rent.userDetails?.name || '알 수 없음',
               rentTime: new Date(rent.timestamp).toLocaleString(),
               returnTime: 'N/A',
-              remark: rent.remark || ''
+              remark: rent.remark || '',
+              status: device?.status || 'N/A', // 디바이스 상태 추가
+              statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
             });
           }
         });
@@ -131,12 +153,13 @@ function DeviceHistory() {
       }
     };
 
+    fetchDevices();
     fetchData();
 
     return () => {
       isMounted = false;
     };
-  }, [token, selectedPeriod, customDateRange]);
+  }, [token, selectedPeriod, customDateRange, devices]);
 
   const handleSearch = () => {
     console.log('Handling search with serial:', searchSerial);
@@ -300,6 +323,8 @@ function DeviceHistory() {
                     <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여자</th>
                     <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여 시간</th>
                     <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">반납 시간</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태 변경 사유</th>
                     <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">특이사항</th>
                   </tr>
                 </thead>
@@ -313,6 +338,8 @@ function DeviceHistory() {
                       <td className="border border-gray-200 p-2">{pair.userDetails}</td>
                       <td className="border border-gray-200 p-2">{pair.rentTime}</td>
                       <td className="border border-gray-200 p-2">{pair.returnTime}</td>
+                      <td className="border border-gray-200 p-2">{pair.status}</td>
+                      <td className="border border-gray-200 p-2">{pair.statusReason}</td>
                       <td className="border border-gray-200 p-2">
                         {pair.remark ? (
                           <button
@@ -321,9 +348,7 @@ function DeviceHistory() {
                           >
                             보기
                           </button>
-                        ) : (
-                          '없음'
-                        )}
+                        ) : '없음'}
                       </td>
                     </tr>
                   ))}
