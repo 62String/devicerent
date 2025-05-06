@@ -582,6 +582,8 @@ router.post('/return-device', async (req, res) => {
       return res.status(403).json({ message: "Cannot return this device" });
     }
 
+
+
     // status 값 유효성 검사
     const validStatuses = ['active', 'repair', 'inactive'];
     const normalizedStatus = status ? status.toLowerCase() : 'active';
@@ -631,6 +633,22 @@ router.post('/return-device', async (req, res) => {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+router.get('/status-history', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: "No token provided" });
+
+  try {
+    jwt.verify(token, JWT_SECRET);
+    const history = await DeviceStatusHistory.find()
+      .sort({ timestamp: -1 })
+      .lean();
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching status history:', error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

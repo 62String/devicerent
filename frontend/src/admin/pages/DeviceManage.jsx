@@ -26,7 +26,11 @@ const DeviceManage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [showStatusHistory, setShowStatusHistory] = useState(false);
+  const [statusHistory, setStatusHistory] = useState([]);
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const devicesPerPage = 50;
+  const historyPerPage = 50;
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -49,10 +53,38 @@ const DeviceManage = () => {
     }
   };
 
+  const fetchStatusHistory = async () => {
+    try {
+      const response = await axios.get(`${apiUrl}/api/devices/status-history`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      console.log('All device status history response:', response.data);
+      setStatusHistory(response.data);
+      setShowStatusHistory(true);
+    } catch (err) {
+      console.error('Error fetching all device status history:', err);
+      setMessage('상태 변경 이력 조회 실패');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const hideStatusHistory = () => {
+    setShowStatusHistory(false);
+    setStatusHistory([]);
+    setHistoryCurrentPage(1);
+  };
+
   const filteredDevices = devices.filter(device =>
     device.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     device.modelName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     device.osName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredStatusHistory = statusHistory.filter(history =>
+    history.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (history.modelName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (history.osName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const sortedDevices = [...filteredDevices].sort((a, b) => {
@@ -297,12 +329,16 @@ const DeviceManage = () => {
         )}
         {error && <p className="text-red-500 text-center mb-4 bg-red-100 p-2 rounded">❌ {error}</p>}
         <div className="mb-6 flex flex-wrap gap-2 justify-center">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="검색..."
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setCurrentPage(1);
+          setHistoryCurrentPage(1);
+          }}
+          placeholder="검색..."
+          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
             onClick={() => openInitModal(false)}
@@ -321,6 +357,12 @@ const DeviceManage = () => {
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
           >
             엑셀 익스포트
+          </button>
+          <button
+            onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory}
+            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+          >
+            {showStatusHistory ? '기기 목록 보기' : '상태 변경 이력'}
           </button>
         </div>
         <form onSubmit={handleRegister} className="mb-6 flex flex-wrap gap-2 justify-center bg-gray-50 p-3 rounded-md">
@@ -369,89 +411,158 @@ const DeviceManage = () => {
             등록
           </button>
         </form>
-        {!error && devices.length === 0 && <p className="text-gray-600 text-center">디바이스 목록이 없습니다.</p>}
-        {!error && devices.length > 0 && (
-          <div className="overflow-x-auto mx-auto max-w-[1024px]">
-            <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
-              <thead>
-                <tr className="bg-blue-50">
-                  {['시리얼 번호', '모델명', 'OS 이름', 'OS 버전', '대여자', '대여일시', '상태', '상태 변경 사유', '액션'].map((header) => (
-                    <th
-                      key={header}
-                      className="border border-gray-200 p-2 text-left font-medium text-gray-700 cursor-pointer"
-                      onClick={() => {
-                        if (sortField === header) {
-                          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortField(header);
-                          setSortOrder('asc');
-                        }
-                      }}
-                    >
-                      {header} {sortField === header && (sortOrder === 'asc' ? '↑' : '↓')}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {currentDevices.map(device => (
-                  <tr key={device.serialNumber} className="hover:bg-gray-50">
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.serialNumber}</td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.modelName || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.osName || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.osVersion || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">
-                      {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation || 'N/A'})` : '없음'}
-                    </td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">
-                      {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
-                    </td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.status || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2 whitespace-normal">{device.statusReason || '없음'}</td>
-                    <td className="border border-gray-200 p-2">
-                      <button
-                        onClick={() => openDeleteModal(device.serialNumber)}
-                        className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 mr-1 text-sm"
-                      >
-                        삭제
-                      </button>
-                      <button
-                        onClick={() => openStatusModal(device)}
-                        className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                      >
-                        상태 변경
-                      </button>
-                    </td>
+        {!error && (
+          showStatusHistory ? (
+            <div className="overflow-x-auto mx-auto max-w-[1024px]">
+              <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
+                <thead>
+                  <tr className="bg-blue-50">
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">시리얼 번호</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">모델명</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 이름</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 버전</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태 변경 사유</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">변경자</th>
+                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">변경 시간</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-4 flex justify-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                disabled={currentPage === 1}
-              >
-                이전
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => (
+                </thead>
+                <tbody>
+                {filteredStatusHistory.length > 0 ? (
+                  filteredStatusHistory
+                      .slice((historyCurrentPage - 1) * historyPerPage, historyCurrentPage * historyPerPage)
+                      .map((history, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.serialNumber}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.modelName || 'N/A'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.osName || 'N/A'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.osVersion || 'N/A'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.status || 'N/A'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.statusReason || '없음'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{history.performedBy || '알 수 없음'}</td>
+                          <td className="border border-gray-200 p-2 whitespace-normal">{new Date(history.timestamp).toLocaleString()}</td>
+                        </tr>
+                      ))
+                  ) : (
+                    <tr>
+                      <td colSpan="8" className="border border-gray-200 p-2 text-center text-gray-600">상태 변경 이력이 없습니다.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <div className="mt-4 flex justify-center gap-2">
                 <button
-                  key={i + 1}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1 rounded ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                  onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className={`px-3 py-1 rounded ${historyCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+                  disabled={historyCurrentPage === 1}
                 >
-                  {i + 1}
+                  이전
                 </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                className={`px-3 py-1 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                disabled={currentPage === totalPages}
-              >
-                다음
-              </button>
+                {Array.from({ length: Math.ceil(filteredStatusHistory.length / historyPerPage) }, (_, i) => (
+                  <button
+                    key={i + 1}
+                    onClick={() => setHistoryCurrentPage(i + 1)}
+                    className={`px-3 py-1 rounded ${historyCurrentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setHistoryCurrentPage(prev => Math.min(prev + 1, Math.ceil(statusHistory.length / historyPerPage)))}
+                  className={`px-3 py-1 rounded ${historyCurrentPage === Math.ceil(statusHistory.length / historyPerPage) ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+                  disabled={historyCurrentPage === Math.ceil(statusHistory.length / historyPerPage)}
+                >
+                  다음
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            devices.length > 0 ? (
+              <div className="overflow-x-auto mx-auto max-w-[1024px]">
+                <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
+                  <thead>
+                    <tr className="bg-blue-50">
+                      {['시리얼 번호', '모델명', 'OS 이름', 'OS 버전', '대여자', '대여일시', '상태', '상태 변경 사유', '액션'].map((header) => (
+                        <th
+                          key={header}
+                          className="border border-gray-200 p-2 text-left font-medium text-gray-700 cursor-pointer"
+                          onClick={() => {
+                            if (sortField === header) {
+                              setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setSortField(header);
+                              setSortOrder('asc');
+                            }
+                          }}
+                        >
+                          {header} {sortField === header && (sortOrder === 'asc' ? '↑' : '↓')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentDevices.map(device => (
+                      <tr key={device.serialNumber} className="hover:bg-gray-50">
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.serialNumber}</td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.modelName || 'N/A'}</td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.osName || 'N/A'}</td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.osVersion || 'N/A'}</td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">
+                          {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation || 'N/A'})` : '없음'}
+                        </td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">
+                          {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
+                        </td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.status || 'N/A'}</td>
+                        <td className="border border-gray-200 p-2 whitespace-normal">{device.statusReason || '없음'}</td>
+                        <td className="border border-gray-200 p-2">
+                          <button
+                            onClick={() => openDeleteModal(device.serialNumber)}
+                            className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 mr-1 text-sm"
+                          >
+                            삭제
+                          </button>
+                          <button
+                            onClick={() => openStatusModal(device)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                          >
+                            상태 변경
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mt-4 flex justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+                    disabled={currentPage === 1}
+                  >
+                    이전
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`px-3 py-1 rounded ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    className={`px-3 py-1 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+                    disabled={currentPage === totalPages}
+                  >
+                    다음
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center">디바이스 목록이 없습니다.</p>
+            )
+          )
         )}
         {showDeleteModal && (
           <div style={{
