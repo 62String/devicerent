@@ -394,12 +394,12 @@ function Devices() {
                     <td className="border border-gray-200 p-2">
                       {device.rentedBy ? (
                         user && device.rentedBy.name === user.name ? (
-                          <button onClick={() => openReturnModal(device.serialNumber)} className="text-blue-500 hover:underline">[반납]</button>
+                          <button onClick={() => openReturnModal(device.serialNumber)} className="text-blue-500 hover:underline">반납</button>
                         ) : (
                           <span className="text-gray-500">대여중</span>
                         )
                       ) : (
-                        <button onClick={() => handleRentDevice(device.serialNumber)} className="text-blue-500 hover:underline">[대여]</button>
+                        <button onClick={() => handleRentDevice(device.serialNumber)} className="text-blue-500 hover:underline">대여</button>
                       )}
                     </td>
                   </tr>
@@ -418,7 +418,8 @@ function Devices() {
                 <button
                   key={i + 1}
                   onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1 rounded ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                  className={`px-3 py-1 rounded  ${currentPage === i + 1 ? '' : 'bg-gray-200 hover:bg-gray-300 hover:shadow-sm'}`}
+                  style={currentPage === i + 1 ? { backgroundColor: '#d1d5db', color: 'black', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', fontWeight: 'bold' } : {}}
                 >
                   {i + 1}
                 </button>

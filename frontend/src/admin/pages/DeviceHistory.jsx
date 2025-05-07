@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom'; // 추가
 import axios from 'axios';
-import ReactPaginate from 'react-paginate';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ko } from 'date-fns/locale';
@@ -19,9 +18,11 @@ function DeviceHistory() {
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [page, setPage] = useState(0);
   const [perPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+  // fetchDevices를 별도의 useEffect로 분리
   useEffect(() => {
     let isMounted = true;
 
@@ -37,6 +38,17 @@ function DeviceHistory() {
         console.error('Error fetching devices:', err);
       }
     };
+
+    fetchDevices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token]); // token만 의존성으로 설정
+
+  // fetchData를 별도의 useEffect로 분리
+  useEffect(() => {
+    let isMounted = true;
 
     const fetchData = async () => {
       try {
@@ -96,8 +108,8 @@ function DeviceHistory() {
                 rentTime: new Date(matchingRent.timestamp).toLocaleString(),
                 returnTime: new Date(record.timestamp).toLocaleString(),
                 remark: matchingRent.remark || '',
-                status: device?.status || 'N/A', // 디바이스 상태 추가
-                statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
+                status: device?.status || 'N/A',
+                statusReason: device?.statusReason || '없음'
               });
               matchingRent.matched = true;
             } else {
@@ -110,8 +122,8 @@ function DeviceHistory() {
                 rentTime: 'N/A',
                 returnTime: new Date(record.timestamp).toLocaleString(),
                 remark: '',
-                status: device?.status || 'N/A', // 디바이스 상태 추가
-                statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
+                status: device?.status || 'N/A',
+                statusReason: device?.statusReason || '없음'
               });
             }
           }
@@ -129,8 +141,8 @@ function DeviceHistory() {
               rentTime: new Date(rent.timestamp).toLocaleString(),
               returnTime: 'N/A',
               remark: rent.remark || '',
-              status: device?.status || 'N/A', // 디바이스 상태 추가
-              statusReason: device?.statusReason || '없음' // 상태 변경 사유 추가
+              status: device?.status || 'N/A',
+              statusReason: device?.statusReason || '없음'
             });
           }
         });
@@ -154,26 +166,28 @@ function DeviceHistory() {
       }
     };
 
-    fetchDevices();
     fetchData();
 
     return () => {
       isMounted = false;
     };
-  }, [token, selectedPeriod, customDateRange, devices]);
+  }, [token, selectedPeriod, customDateRange]);
 
   const handleSearch = () => {
     console.log('Handling search with serial:', searchSerial);
-    if (!searchSerial.trim()) {
+    const trimmedSearch = searchSerial.trim();
+    if (!trimmedSearch) {
       console.log('Search serial empty, resetting to all pairs');
       setHistoryPairs(originalPairs);
+      setCurrentPage(1);
       return;
     }
     const filtered = originalPairs.filter(pair => 
-      pair.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
+      pair.serialNumber.toLowerCase().includes(trimmedSearch.toLowerCase())
     );
-    console.log('Filtered pairs:', filtered);
+    console.log('Filtered pairs:', filtered.map(pair => pair.serialNumber));
     setHistoryPairs(filtered);
+    setCurrentPage(1);
   };
 
   const handleReset = () => {
@@ -182,6 +196,7 @@ function DeviceHistory() {
     setSelectedPeriod('all');
     setCustomDateRange({ start: '', end: '' });
     setHistoryPairs(originalPairs);
+    setCurrentPage(1); // 페이지 초기화
   };
 
   const handleExport = async () => {
@@ -234,9 +249,8 @@ function DeviceHistory() {
     setSelectedRemark('');
   };
 
-  const offset = page * perPage;
+  const offset = (currentPage - 1) * perPage;
   const currentPairs = historyPairs.slice(offset, offset + perPage);
-  const pageCount = Math.ceil(historyPairs.length / perPage);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -356,22 +370,32 @@ function DeviceHistory() {
                 </tbody>
               </table>
             </div>
-            <ReactPaginate
-              previousLabel={'이전'}
-              nextLabel={'다음'}
-              breakLabel={'...'}
-              pageCount={pageCount}
-              marginPagesDisplayed={2}
-              pageRangeDisplayed={5}
-              onPageChange={handlePageClick}
-              containerClassName={'flex flex-row justify-center items-center space-x-2 mt-4 list-none'}
-              activeClassName={'bg-blue-600 text-white rounded-md'}
-              pageClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100'}
-              previousClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
-              nextClassName={'px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50'}
-              breakClassName={'px-3 py-1'}
-              disabledClassName={'opacity-50 cursor-not-allowed'}
-            />
+            <div className="mt-4 flex justify-center gap-2">
+  <button
+    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+    className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+    disabled={currentPage === 1}
+  >
+    이전
+  </button>
+  {Array.from({ length: Math.ceil(historyPairs.length / perPage) }, (_, i) => (
+    <button
+      key={i + 1}
+      onClick={() => setCurrentPage(i + 1)}
+      className={`px-3 py-1 rounded ${currentPage === i + 1 ? '' : 'bg-gray-200 hover:bg-gray-300 hover:shadow-sm'}`}
+      style={currentPage === i + 1 ? { backgroundColor: '#d1d5db', color: 'black', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', fontWeight: 'bold' } : {}}
+    >
+      {i + 1}
+    </button>
+  ))}
+  <button
+    onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(historyPairs.length / perPage)))}
+    className={`px-3 py-1 rounded ${currentPage === Math.ceil(historyPairs.length / perPage) ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
+    disabled={currentPage === Math.ceil(historyPairs.length / perPage)}
+  >
+    다음
+  </button>
+</div>
           </>
         )}
         {showRemarkModal && (
