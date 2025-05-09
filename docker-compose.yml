@@ -2,7 +2,7 @@ services:
   mongo:
     image: mongo:latest
     ports:
-      - "${MONGO_PORT}:27017"
+      - "${MONGO_PORT}:${MONGO_PORT}"
     volumes:
       - mongo-data:/data/db
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
@@ -22,24 +22,19 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "${BACKEND_PORT}:4000"
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
     depends_on:
       mongo:
         condition: service_healthy
     environment:
-      - MONGODB_HOST=mongo
-      - MONGODB_PORT=${MONGO_PORT}
-      - MONGODB_URI=mongodb://${MONGODB_HOST}:${MONGO_PORT}/your_database
+      - MONGODB_URI=${MONGODB_URI}
       - NODE_ENV=development
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${FRONTEND_PORT}:3000"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
       - backend
 volumes:
