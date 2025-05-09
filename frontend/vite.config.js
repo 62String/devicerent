@@ -7,6 +7,10 @@ export default defineConfig({
     react(),
     tailwindcss(), // v4 플러그인 사용
   ],
+  server: {
+    host: true, //외부 접속 허용
+    port: 3000
+  },
   envDir: './',
   define: {
     'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL),
