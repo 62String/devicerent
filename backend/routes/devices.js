@@ -30,6 +30,9 @@ if (!fs.existsSync(EXPORT_DIR)) {
 // 데이터베이스 용량 체크
 const checkDbStatus = async () => {
   try {
+    if (mongoose.connection.readyState !== 1) { // 1 = connected
+      throw new Error('MongoDB connection not ready');
+    }
     const stats = await mongoose.connection.db.stats();
     const size = stats.dataSize;
     const storageSize = stats.storageSize;

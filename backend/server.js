@@ -1,52 +1,63 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const xlsx = require('xlsx');
-const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
-const { verifyToken } = require('./utils/auth');
-const RentalHistory = require('./models/RentalHistory');
-const ExportHistory = require('./models/ExportHistory');
-const Device = require('./models/Device');
-const User = require('./models/User');
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose'); // MongoDB 연결을 위한 Mongoose 모듈
+require('dotenv').config(); // 환경 변수 로드
+const express = require('express'); // Express 프레임워크
+const cors = require('cors'); // CORS 설정
+const xlsx = require('xlsx'); // Excel 파일 처리
+const jwt = require('jsonwebtoken'); // JWT 토큰 처리
+const { verifyToken } = require('./utils/auth'); // JWT 토큰 검증 유틸리티
+const RentalHistory = require('./models/RentalHistory'); // 대여 기록 모델
+const ExportHistory = require('./models/ExportHistory'); // 내보내기 기록 모델
+const Device = require('./models/Device'); // 디바이스 모델
+const User = require('./models/User'); // 사용자 모델
+const fs = require('fs'); // 파일 시스템 모듈
+const path = require('path'); // 경로 처리 모듈
 
-const app = express();
+// 로그 함수 정의 (파일 상단으로 이동)
+const log = process.env.NODE_ENV === 'test' ? () => {} : console.log;
 
+const app = express(); // Express 앱 생성
+
+log('Starting backend server...'); // 서버 시작 로그
+
+// CORS 설정: 프론트엔드 도메인 허용
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3001'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // JSON 파싱 미들웨어
+app.use(express.urlencoded({ extended: true })); // URL 인코딩 파싱 미들웨어
 
-const log = process.env.NODE_ENV === 'test' ? () => {} : console.log;
-
+// 요청 로깅 미들웨어
 app.use((req, res, next) => {
   log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// 테스트 환경에서 의존성 로드 방지
+log('Loading routes...'); // 라우트 로드 시작 로그
+
+// 테스트 환경에서 라우트 로드 방지
 const authRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/auth') : null;
 const deviceRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/devices') : null;
-//const approveRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/approve') : null;
 const usersRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/admin/users') : null;
 
+// 테스트 환경이 아닌 경우 라우트 설정
 if (process.env.NODE_ENV !== 'test') {
-  app.use('/api/auth', authRoutes);
-  app.use('/api/devices', deviceRoutes);
-  //app.use('/api/admin', approveRoutes);
-  app.use('/api/admin', usersRoutes);
+  app.use('/api/auth', authRoutes); // 인증 관련 라우트
+  app.use('/api/devices', deviceRoutes); // 디바이스 관련 라우트
+  app.use('/api/admin', usersRoutes); // 관리자 관련 라우트
 }
 
+log('Setting up exports directory...'); // 내보내기 디렉토리 설정 로그
+
+// 정적 파일 제공: 내보내기 파일 접근
 app.use('/exports', express.static(path.resolve(__dirname, 'exports')));
 
+// 내보내기 디렉토리 설정
 const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, 'exports', 'Device-list');
 
+// 내보내기 디렉토리 생성
 if (!fs.existsSync(EXPORT_DIR)) {
   try {
     fs.mkdirSync(EXPORT_DIR, { recursive: true });
@@ -56,6 +67,12 @@ if (!fs.existsSync(EXPORT_DIR)) {
   }
 }
 
+/**
+ * 디바이스 데이터를 초기화하는 함수
+ * @param {boolean} force - 강제로 초기화 여부
+ * @param {string|null} exportPath - 내보내기 파일 경로
+ * @returns {Promise<void>} 초기화 결과
+ */
 const initDevices = async (force = false, exportPath = null) => {
   try {
     const devices = await Device.find();
@@ -213,13 +230,13 @@ const initDevices = async (force = false, exportPath = null) => {
         serialNumber: device['식별번호'],
         deviceInfo: device['기기명'] || 'N/A',
         osName: device.sheetIndex === 0 ? 'Android' : 'iOS',
-        osVersion: device['OS버전'] || 'N/A', // 수정
+        osVersion: device['OS버전'] || 'N/A',
         modelName: device['기기명'] || 'N/A',
         status: 'active',
         rentedBy: null,
         rentedAt: null,
         remark: '',
-        specialRemark: '' // 추가
+        specialRemark: ''
       };
 
       devicesToInsert.push(newDevice);
@@ -281,6 +298,11 @@ const initDevices = async (force = false, exportPath = null) => {
   }
 };
 
+/**
+ * 관리자 권한으로 디바이스 초기화를 수행하는 엔드포인트
+ * @param {Object} req - 요청 객체
+ * @param {Object} res - 응답 객체
+ */
 app.post('/api/admin/init-devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -302,6 +324,11 @@ app.post('/api/admin/init-devices', async (req, res) => {
   }
 });
 
+/**
+ * 관리자 권한으로 유효하지 않은 디바이스를 삭제하고 다시 동기화하는 엔드포인트
+ * @param {Object} req - 요청 객체
+ * @param {Object} res - 응답 객체
+ */
 app.post('/api/admin/clear-invalid-devices', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -349,6 +376,11 @@ app.post('/api/admin/clear-invalid-devices', async (req, res) => {
   }
 });
 
+/**
+ * 관리자 권한으로 디바이스 데이터 무결성을 검증하는 엔드포인트
+ * @param {Object} req - 요청 객체
+ * @param {Object} res - 응답 객체
+ */
 app.get('/api/admin/verify-data-integrity', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -389,9 +421,11 @@ app.get('/api/admin/verify-data-integrity', async (req, res) => {
   }
 });
 
+// 데이터 보존 기간 설정 (2년)
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2;
 const EXPORT_DIR_SERVER = path.resolve(__dirname, 'exports');
 
+// 내보내기 디렉토리 생성
 if (!fs.existsSync(EXPORT_DIR_SERVER)) {
   try {
     fs.mkdirSync(EXPORT_DIR_SERVER, { recursive: true });
@@ -401,6 +435,10 @@ if (!fs.existsSync(EXPORT_DIR_SERVER)) {
   }
 }
 
+/**
+ * 2년 초과 데이터를 내보내고 삭제하는 함수
+ * @returns {Promise<void>} 내보내기 및 삭제 결과
+ */
 const exportRetentionData = async () => {
   try {
     const query = { timestamp: { $lte: new Date(Date.now() - DB_RETENTION_LIMIT) } };
@@ -493,6 +531,11 @@ const exportRetentionData = async () => {
   }
 };
 
+/**
+ * 인증된 사용자의 데이터를 반환하는 엔드포인트
+ * @param {Object} req - 요청 객체
+ * @param {Object} res - 응답 객체
+ */
 app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -508,6 +551,11 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
+/**
+ * 현재 사용자 정보를 반환하는 엔드포인트
+ * @param {Object} req - 요청 객체
+ * @param {Object} res - 응답 객체
+ */
 app.get('/api/me', async (req, res) => {
   log('Received /api/me request with token:', req.headers.authorization);
   const token = req.headers.authorization?.split(' ')[1];
@@ -529,7 +577,7 @@ app.get('/api/me', async (req, res) => {
         id: user.id,
         name: user.name,
         affiliation: user.affiliation,
-        position: user.position, // 추가
+        position: user.position,
         isPending: user.isPending || false,
         isAdmin: user.isAdmin || false,
       },
@@ -540,19 +588,51 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 4000;
-let interval;
-let serverConnection;
+const PORT = process.env.PORT || 4000; // 서버 포트 설정
+let interval; // 주기적 작업을 위한 인터벌 변수
 
+log('Checking environment variables...'); // 환경 변수 확인 로그
+log('MONGODB_URI:', process.env.MONGODB_URI);
+log('PORT:', process.env.PORT);
+log('NODE_ENV:', process.env.NODE_ENV);
+
+log('Connecting to MongoDB...'); // MongoDB 연결 시작 로그
+
+/**
+ * MongoDB 연결을 재시도하는 함수
+ * @returns {Promise<void>} 연결 결과
+ */
+const connectWithRetry = async () => {
+  let retries = 10;
+  while (retries > 0) {
+    try {
+      log('Attempting to connect to MongoDB...');
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/your_database', {
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 60000
+      });
+      log('MongoDB connected successfully');
+      break;
+    } catch (err) {
+      console.error('MongoDB connection error:', err.message);
+      retries -= 1;
+      if (retries === 0) {
+        console.error('Failed to connect to MongoDB after retries:', err);
+        console.log('Waiting before restarting...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        retries = 10;
+      }
+      console.log(`Retrying connection (${10 - retries}/10)...`);
+      await new Promise(resolve => setTimeout(resolve, 15000));
+    }
+  }
+};
+
+// 테스트 환경이 아닌 경우 서버 실행
 if (process.env.NODE_ENV !== 'test') {
-  serverConnection = mongoose
-    .connect('mongodb://localhost:27017/devicerent', {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 60000,
-      connectTimeoutMS: 60000
-    })
+  connectWithRetry()
     .then(async () => {
-      log('MongoDB connected');
       const deviceCount = await Device.countDocuments();
       if (deviceCount === 0) {
         log('No devices found, initializing from Excel directory...');
@@ -565,17 +645,22 @@ if (process.env.NODE_ENV !== 'test') {
         log('Checking retention data at:', new Date().toISOString());
         exportRetentionData().catch(err => console.error('Interval execution error:', err));
       }, 5 * 60 * 1000);
-    })
-    .catch((err) => console.error('MongoDB connection error:', err));
 
-  app.listen(PORT, () => {
-    log(`Server running on port ${PORT}`);
-  });
+      app.listen(PORT, () => {
+        log(`Server running on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to connect to MongoDB after retries:', err);
+      log('Continuing to retry connection indefinitely...');
+      setTimeout(connectWithRetry, 30000);
+    });
 }
 
+// 테스트 환경 종료 처리
 if (process.env.NODE_ENV === 'test') {
   process.on('exit', async () => {
-    if (serverConnection) {
+    if (mongoose.connection.readyState === 1) {
       await mongoose.connection.close();
       await mongoose.disconnect();
     }
@@ -583,4 +668,4 @@ if (process.env.NODE_ENV === 'test') {
   });
 }
 
-module.exports = { app, initDevices, exportRetentionData };
+module.exports = { app, initDevices, exportRetentionData }; // 모듈 내보내기
