@@ -29,6 +29,7 @@ const DeviceManage = () => {
   const [showStatusHistory, setShowStatusHistory] = useState(false);
   const [statusHistory, setStatusHistory] = useState([]);
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [selectedFile, setSelectedFile] = useState(null); // 새 상태: 업로드할 파일
   const devicesPerPage = 50;
   const historyPerPage = 50;
   const token = localStorage.getItem('token');
@@ -301,6 +302,45 @@ const DeviceManage = () => {
     }, 100);
   };
 
+  // 새 기능: 파일 업로드 핸들러
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setSelectedFile(file);
+    if (file) {
+      setMessage(`선택된 파일: ${file.name}`);
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setMessage('업로드할 파일을 선택해 주세요.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('excelFile', selectedFile);
+
+    try {
+      const response = await axios.post(`${apiUrl}/api/admin/upload-devices`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+        },
+        withCredentials: true
+      });
+      setMessage('디바이스 초기화 성공!');
+      setTimeout(() => setMessage(''), 3000);
+      setSelectedFile(null); // 파일 선택 초기화
+      fetchDevices(); // 디바이스 목록 갱신
+    } catch (err) {
+      setMessage(err.response?.data?.message || '파일 업로드 및 초기화 실패');
+      setTimeout(() => setMessage(''), 3000);
+      console.error('Error uploading file:', err);
+    }
+  };
+
   if (!user || !user.isAdmin) {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center">관리자 권한이 없습니다.</div>;
   }
@@ -329,16 +369,16 @@ const DeviceManage = () => {
         )}
         {error && <p className="text-red-500 text-center mb-4 bg-red-100 p-2 rounded">❌ {error}</p>}
         <div className="mb-6 flex flex-wrap gap-2 justify-center">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => {
-          setSearchTerm(e.target.value);
-          setCurrentPage(1);
-          setHistoryCurrentPage(1);
-          }}
-          placeholder="검색..."
-          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+              setHistoryCurrentPage(1);
+            }}
+            placeholder="검색..."
+            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
             onClick={() => openInitModal(false)}
@@ -358,6 +398,20 @@ const DeviceManage = () => {
           >
             엑셀 익스포트
           </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleFileChange}
+              className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleUpload}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              엑셀 파일 임포트
+            </button>
+          </div>
           <button
             onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory}
             className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"

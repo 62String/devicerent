@@ -1,22 +1,27 @@
+version: "3.8"
 services:
   mongo:
     image: mongo:latest
+    container_name: mongo
     ports:
-      - "${MONGO_PORT}:${MONGO_PORT}"
+      - "27017:27017"
     volumes:
       - mongo-data:/data/db
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    command: mongod --replSet rs0 --bind_ip_all
+    #command: mongod --replSet rs0 --bind_ip_all
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 30s
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - app-tier
   backend:
     build:
       context: ./backend
@@ -27,8 +32,18 @@ services:
       mongo:
         condition: service_healthy
     environment:
-      - MONGODB_URI=${MONGODB_URI}
-      - NODE_ENV=development
+    - MONGODB_HOST=${MONGODB_HOST}
+    - MONGODB_PORT=${MONGODB_PORT}
+    - MONGODB_DATABASE=${MONGODB_DATABASE}
+    - MONGODB_URI=mongodb://${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DATABASE}
+    - PORT=${PORT}
+    - NODE_ENV=development
+    - JWT_SECRET=${JWT_SECRET}
+    - EXPORT_DIR=${EXPORT_DIR}
+    volumes:
+    - ./backend/exports/Device-list:/app/exports/Device-list  # 볼륨 매핑 추가
+    networks:
+      - app-tier
   frontend:
     build:
       context: ./frontend
@@ -37,5 +52,10 @@ services:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
       - backend
+    networks:
+      - app-tier
 volumes:
   mongo-data:
+networks:
+  app-tier:
+    driver: bridge
