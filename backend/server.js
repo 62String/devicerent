@@ -75,7 +75,9 @@ if (!fs.existsSync(EXPORT_DIR)) {
  */
 const initDevices = async (force = false, exportPath = null) => {
   try {
+    log('Starting initDevices...');
     const devices = await Device.find();
+    log('Existing devices count:', devices.length);
     const invalidDevices = [];
     const serialNumbers = new Set();
 
@@ -132,37 +134,70 @@ const initDevices = async (force = false, exportPath = null) => {
       importFilePath = exportPath;
     } else {
       log('EXPORT_DIR path:', EXPORT_DIR);
-      const files = fs.readdirSync(EXPORT_DIR).filter(file => file.endsWith('.xlsx'));
-      log('Files found in EXPORT_DIR:', files);
-      if (files.length === 0) {
+      log('Checking if EXPORT_DIR exists...');
+      if (!fs.existsSync(EXPORT_DIR)) {
+        log('Error: EXPORT_DIR does not exist:', EXPORT_DIR);
+        return;
+      }
+      log('EXPORT_DIR exists, attempting to read files...');
+
+      let files = [];
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          files = fs.readdirSync(EXPORT_DIR);
+          log('Files read successfully:', files);
+          break;
+        } catch (err) {
+          log('Error reading directory, retrying...', err.message);
+          retries -= 1;
+          if (retries === 0) {
+            log('Failed to read directory after retries:', err.message);
+            return;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      const excelFiles = files.filter(file => file.toLowerCase().endsWith('.xlsx'));
+      log('Excel files in EXPORT_DIR:', excelFiles);
+      if (excelFiles.length === 0) {
         log('Warning: No Excel files found in directory:', EXPORT_DIR);
-        log('Available files:', fs.readdirSync(EXPORT_DIR));
+        try {
+          const allFiles = fs.readdirSync(EXPORT_DIR);
+          log('All available files in EXPORT_DIR:', allFiles);
+        } catch (err) {
+          log('Error listing all files in EXPORT_DIR:', err.message);
+        }
         return;
       }
 
       let selectedFile = null;
-      for (const file of files.sort((a, b) => {
+      for (const file of excelFiles.sort((a, b) => {
         const aTime = fs.statSync(path.join(EXPORT_DIR, a)).mtime.getTime();
         const bTime = fs.statSync(path.join(EXPORT_DIR, b)).mtime.getTime();
         return bTime - aTime;
       })) {
         const tempPath = path.join(EXPORT_DIR, file);
-        const tempWorkbook = xlsx.readFile(tempPath);
-        log('Reading file:', tempPath);
-        log('Sheet names:', tempWorkbook.SheetNames);
-        const tempSheet = tempWorkbook.Sheets[tempWorkbook.SheetNames[0]];
-        const tempRawDevices = xlsx.utils.sheet_to_json(tempSheet);
-        log('Devices in file:', tempRawDevices);
-        if (tempRawDevices && tempRawDevices.length > 0) {
-          selectedFile = file;
-          break;
+        try {
+          const tempWorkbook = xlsx.readFile(tempPath);
+          log('Reading file:', tempPath);
+          log('Sheet names:', tempWorkbook.SheetNames);
+          const tempSheet = tempWorkbook.Sheets[tempWorkbook.SheetNames[0]];
+          const tempRawDevices = xlsx.utils.sheet_to_json(tempSheet);
+          log('Devices in file:', tempRawDevices);
+          if (tempRawDevices && tempRawDevices.length > 0) {
+            selectedFile = file;
+            break;
+          }
+          log(`Skipping empty Excel file: ${tempPath}`);
+        } catch (err) {
+          log(`Error reading Excel file ${tempPath}:`, err.message);
         }
-        log(`Skipping empty Excel file: ${tempPath}`);
       }
 
       if (!selectedFile) {
         log('Error: No Excel files with data found in directory:', EXPORT_DIR);
-        log('Available files:', files);
         return;
       }
 
@@ -173,8 +208,8 @@ const initDevices = async (force = false, exportPath = null) => {
 
     sheet = workbook.Sheets[workbook.SheetNames[0]];
     log('Available sheet names:', workbook.SheetNames);
-    const androidSheet = workbook.Sheets[workbook.SheetNames[0]]; // 안드로이드 시트
-    const iosSheet = workbook.Sheets[workbook.SheetNames[1]]; // iOS 시트
+    const androidSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const iosSheet = workbook.Sheets[workbook.SheetNames[1]];
     if (!androidSheet) log('Error: Android sheet not found');
     if (!iosSheet) log('Error: iOS sheet not found');
     const androidDevices = xlsx.utils.sheet_to_json(androidSheet, { header: ['번호', '식별번호', '기기명', 'Chipset', 'CPU', 'GPU', 'Memory', 'Bluetooth', '화면크기', '해상도', 'OS버전'] }).slice(1).map(device => ({ ...device, sheetIndex: 0 }));
@@ -598,21 +633,41 @@ log('NODE_ENV:', process.env.NODE_ENV);
 
 log('Connecting to MongoDB...'); // MongoDB 연결 시작 로그
 
-/**
- * MongoDB 연결을 재시도하는 함수
- * @returns {Promise<void>} 연결 결과
- */
+
 const connectWithRetry = async () => {
   let retries = 10;
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://mongo:27017/your_database';
+
+  log('MONGODB_URI to be used:', MONGODB_URI);
+
+  // Mongoose 연결 상태 초기화
+  if (mongoose.connection.readyState !== 0) {
+    log('Closing existing MongoDB connection before retry...');
+    await mongoose.connection.close();
+  }
+
+  // Mongoose 내부 캐시 강제 정리
+  for (const conn of mongoose.connections) {
+    if (conn.readyState !== 0) {
+      log('Closing connection:', conn.host, conn.port);
+      await conn.close();
+    }
+  }
+
+  // Mongoose 내부 상태 디버깅
+  log('Mongoose connections before connect:', mongoose.connections.length);
+
   while (retries > 0) {
     try {
-      log('Attempting to connect to MongoDB...');
-      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/your_database', {
+      log(`Attempting to connect to MongoDB with URI: ${MONGODB_URI}...`);
+      const connection = await mongoose.connect(MONGODB_URI, {
         serverSelectionTimeoutMS: 30000,
         socketTimeoutMS: 60000,
-        connectTimeoutMS: 60000
+        connectTimeoutMS: 60000,
       });
-      log('MongoDB connected successfully');
+      log('MongoDB connected successfully to:', MONGODB_URI);
+      log('Connection host:', connection.connection.host);
+      log('Connection port:', connection.connection.port);
       break;
     } catch (err) {
       console.error('MongoDB connection error:', err.message);
@@ -627,7 +682,21 @@ const connectWithRetry = async () => {
       await new Promise(resolve => setTimeout(resolve, 15000));
     }
   }
+
+  mongoose.connection.on('connected', () => {
+    log('Mongoose connection established');
+  });
+
+  mongoose.connection.on('error', (err) => {
+    console.error('Mongoose connection error:', err);
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    log('Mongoose connection disconnected');
+  });
 };
+
+module.exports = connectWithRetry;
 
 // 테스트 환경이 아닌 경우 서버 실행
 if (process.env.NODE_ENV !== 'test') {

@@ -11,6 +11,7 @@ const { adminAuth } = require('./middleware');
 const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer'); // Multer 추가
 
 const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
@@ -26,6 +27,29 @@ if (!fs.existsSync(EXPORT_DIR)) {
     console.error('Failed to create exports directory in routes/devices:', err);
   }
 }
+
+// Multer 설정
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, EXPORT_DIR); // 업로드 파일 저장 경로
+  },
+  filename: (req, file, cb) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    cb(null, `uploaded_${timestamp}${path.extname(file.originalname)}`); // 파일 이름: uploaded_날짜시간.xlsx
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      cb(null, true); // .xlsx 파일만 허용
+    } else {
+      cb(new Error('Only .xlsx files are allowed'), false);
+    }
+  }
+});
+
 
 // 데이터베이스 용량 체크
 const checkDbStatus = async () => {
@@ -67,6 +91,26 @@ router.post('/history/exports/log', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('Log error:', error);
     res.status(500).json({ message: '로그 기록 실패' });
+  }
+});
+
+// 엑셀 파일 업로드 및 디바이스 초기화 라우트 추가
+router.post('/admin/upload-devices', adminAuth, upload.single('excelFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const filePath = path.join(EXPORT_DIR, req.file.filename);
+    console.log('Uploaded file path:', filePath);
+
+    // initDevices 함수 호출
+    await initDevices(true, filePath);
+
+    res.status(200).json({ message: 'Devices initialized successfully from uploaded file' });
+  } catch (err) {
+    console.error('Error in upload-devices:', err.message);
+    res.status(500).json({ message: 'Error initializing devices', error: err.message });
   }
 });
 
