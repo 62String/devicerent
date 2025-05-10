@@ -29,7 +29,7 @@ const DeviceManage = () => {
   const [showStatusHistory, setShowStatusHistory] = useState(false);
   const [statusHistory, setStatusHistory] = useState([]);
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
-  const [selectedFile, setSelectedFile] = useState(null); // 새 상태: 업로드할 파일
+  // const [selectedFile, setSelectedFile] = useState(null); // 엑셀 임포트 관련 상태 주석 처리
   const devicesPerPage = 50;
   const historyPerPage = 50;
   const token = localStorage.getItem('token');
@@ -302,7 +302,7 @@ const DeviceManage = () => {
     }, 100);
   };
 
-  // 새 기능: 파일 업로드 핸들러
+  /*
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setSelectedFile(file);
@@ -332,14 +332,15 @@ const DeviceManage = () => {
       });
       setMessage('디바이스 초기화 성공!');
       setTimeout(() => setMessage(''), 3000);
-      setSelectedFile(null); // 파일 선택 초기화
-      fetchDevices(); // 디바이스 목록 갱신
+      setSelectedFile(null);
+      fetchDevices();
     } catch (err) {
       setMessage(err.response?.data?.message || '파일 업로드 및 초기화 실패');
       setTimeout(() => setMessage(''), 3000);
       console.error('Error uploading file:', err);
     }
   };
+  */
 
   if (!user || !user.isAdmin) {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center">관리자 권한이 없습니다.</div>;
@@ -398,6 +399,7 @@ const DeviceManage = () => {
           >
             엑셀 익스포트
           </button>
+          {/*
           <div className="flex items-center gap-2">
             <input
               type="file"
@@ -405,13 +407,8 @@ const DeviceManage = () => {
               onChange={handleFileChange}
               className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button
-              onClick={handleUpload}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-            >
-              엑셀 파일 임포트
-            </button>
           </div>
+          */}
           <button
             onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory}
             className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"

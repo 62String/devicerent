@@ -1,7 +1,7 @@
 // init-mongo.js
 db = db.getSiblingDB('devicerental');
 db.devices.drop();
-db.devices.createCollection('devices');
+//db.devices.createCollection('devices');
 db.devices.insertMany([
   { 
     serialNumber: "SN001",

@@ -10,11 +10,11 @@ services:
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     #command: mongod --replSet rs0 --bind_ip_all
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.getSiblingDB('devicerental').getCollectionNames().includes('devices')"]
       interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     logging:
       driver: "json-file"
       options:
@@ -39,7 +39,7 @@ services:
     - PORT=${PORT}
     - NODE_ENV=development
     - JWT_SECRET=${JWT_SECRET}
-    - EXPORT_DIR=${EXPORT_DIR}
+    - EXPORT_DIR=/app/exports/Device-list  # 명시적 경로 설정
     volumes:
     - ./backend/exports/Device-list:/app/exports/Device-list  # 볼륨 매핑 추가
     networks:
