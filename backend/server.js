@@ -19,8 +19,8 @@ const app = express();
 log('Starting backend server...');
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
@@ -618,7 +618,7 @@ log('Connecting to MongoDB...');
 
 const connectWithRetry = async () => {
   let retries = 10;
-  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://mongo:27017/your_database';
+  const MONGODB_URI = process.env.MONGODB_URI || `mongodb://${process.env.MONGODB_HOST}:${process.env.MONGODB_PORT}/${process.env.MONGODB_DATABASE}`;
 
   log('MONGODB_URI to be used:', MONGODB_URI);
 
@@ -693,8 +693,8 @@ if (process.env.NODE_ENV !== 'test') {
         exportRetentionData().catch(err => console.error('Interval execution error:', err));
       }, 5 * 60 * 1000);
 
-      app.listen(PORT, () => {
-        log(`Server running on port ${PORT}`);
+      app.listen(PORT, '0.0.0.0', () => {
+      log(`Server running on port ${PORT}`);
       });
     })
     .catch((err) => {

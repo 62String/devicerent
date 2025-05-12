@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 function Register() {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     id: '',

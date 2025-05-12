@@ -1,10 +1,10 @@
-version: "3.8"
+
 services:
   mongo:
     image: mongo:latest
     container_name: mongo
     ports:
-      - "27017:27017"
+      - "0.0.0.0:27017:27017"
     volumes:
       - mongo-data:/data/db
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
@@ -27,7 +27,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    - "0.0.0.0:4000:4000"
     depends_on:
       mongo:
         condition: service_healthy
@@ -36,10 +36,11 @@ services:
     - MONGODB_PORT=${MONGODB_PORT}
     - MONGODB_DATABASE=${MONGODB_DATABASE}
     - MONGODB_URI=mongodb://${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DATABASE}
-    - PORT=${PORT}
+    - PORT=4000
     - NODE_ENV=development
     - JWT_SECRET=${JWT_SECRET}
-    - EXPORT_DIR=/app/exports/Device-list  # 명시적 경로 설정
+    - EXPORT_DIR=/app/exports/Device-list #명시적 경로 설정
+    command: sh -c "sleep 20 && npm start"
     volumes:
     - ./backend/exports/Device-list:/app/exports/Device-list  # 볼륨 매핑 추가
     networks:
@@ -49,9 +50,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    - "0.0.0.0:3000:3000"
     depends_on:
       - backend
+    environment:
+      - VITE_API_URL=http://192.168.0.125:4000
     networks:
       - app-tier
 volumes:

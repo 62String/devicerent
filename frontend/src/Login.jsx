@@ -9,7 +9,7 @@ function Login() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { setUser } = useAuth(); // useAuth에서 setUser 가져오기
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   useEffect(() => {
     if (error) {
