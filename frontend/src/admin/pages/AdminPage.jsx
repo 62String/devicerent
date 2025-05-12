@@ -9,7 +9,8 @@ function AdminPage() {
   const [message, setMessage] = useState('');
   const [downloadLink, setDownloadLink] = useState('');
   const [lastRetentionCheck, setLastRetentionCheck] = useState(null);
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+console.log('AdminPage - apiUrl:', apiUrl);
   const token = localStorage.getItem('token');
 
   // 관리자 권한 확인

@@ -20,7 +20,7 @@ function DeviceHistory() {
   const [perPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   // fetchDevices를 별도의 useEffect로 분리
   useEffect(() => {

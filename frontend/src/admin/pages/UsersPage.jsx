@@ -18,7 +18,7 @@ function UsersPage() {
   const [sortOrder, setSortOrder] = useState('asc');
   const usersPerPage = 50; // 50개로 설정
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   useEffect(() => {
     fetchUsers();

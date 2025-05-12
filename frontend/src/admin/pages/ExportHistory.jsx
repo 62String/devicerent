@@ -16,7 +16,7 @@ function ExportHistory() {
   const [startDate, setStartDate] = useState(new Date('2020-01-01'));
   const [endDate, setEndDate] = useState(null);
   const perPage = 50; // 50개로 설정
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
   const token = localStorage.getItem('token');
 
   const fetchExportHistory = async () => {

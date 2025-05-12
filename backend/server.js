@@ -19,7 +19,15 @@ const app = express();
 log('Starting backend server...');
 
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // 허용할 Origin 명시
+    const allowedOrigins = ['http://192.168.0.125:3000', 'http://localhost:3000'];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

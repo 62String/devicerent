@@ -13,7 +13,7 @@ const DeviceStatus = () => {
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [selectedRemark, setSelectedRemark] = useState('');
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   console.log('DeviceStatus initialized - token:', token);
   console.log('DeviceStatus initialized - apiUrl:', apiUrl);

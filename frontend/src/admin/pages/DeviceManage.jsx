@@ -33,26 +33,32 @@ const DeviceManage = () => {
   const devicesPerPage = 50;
   const historyPerPage = 50;
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   useEffect(() => {
     fetchDevices();
   }, []);
 
-  const fetchDevices = async () => {
-    try {
-      const response = await axios.get(`${apiUrl}/api/devices`, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
-      });
-      console.log('DeviceManage fetchDevices response:', response.data);
-      setDevices(response.data);
-      setError(null);
-    } catch (err) {
-      setError('디바이스 목록을 불러오지 못했습니다. 서버를 확인해 주세요.');
-      console.error('Error fetching devices:', err);
+ const fetchDevices = async () => {
+  try {
+    console.log('Fetching devices from:', `${apiUrl}/api/devices`);
+    const response = await axios.get(`${apiUrl}/api/devices`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log('DeviceManage fetchDevices response:', response.data);
+    if (!Array.isArray(response.data)) {
+      console.error('Response data is not an array:', response.data);
+      setError('디바이스 데이터 형식이 올바르지 않습니다.');
+      return;
     }
-  };
+    setDevices(response.data);
+    console.log('Devices state updated:', response.data);
+    setError(null);
+  } catch (err) {
+    setError('디바이스 목록을 불러오지 못했습니다. 서버를 확인해 주세요.');
+    console.error('Error fetching devices:', err);
+  }
+};
 
   const fetchStatusHistory = async () => {
     try {
