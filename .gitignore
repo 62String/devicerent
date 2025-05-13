@@ -4,3 +4,8 @@ node_modules/
 *.log
 echo "tests/coverage/" >> .gitignore
 git restore tests/coverage/*
+.env
+.env.development
+.env.development.local
+.env.production
+docker-compose.yml

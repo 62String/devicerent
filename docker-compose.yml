@@ -1,4 +1,3 @@
-
 services:
   mongo:
     image: mongo:latest
@@ -8,7 +7,6 @@ services:
     volumes:
       - mongo-data:/data/db
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    #command: mongod --replSet rs0 --bind_ip_all
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.getSiblingDB('devicerental').getCollectionNames().includes('devices')"]
       interval: 10s
@@ -22,43 +20,44 @@ services:
         max-file: "3"
     networks:
       - app-tier
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-    - "0.0.0.0:4000:4000"
+      - "0.0.0.0:4000:4000"
     depends_on:
       mongo:
         condition: service_healthy
     environment:
-    - MONGODB_HOST=${MONGODB_HOST}
-    - MONGODB_PORT=${MONGODB_PORT}
-    - MONGODB_DATABASE=${MONGODB_DATABASE}
-    - MONGODB_URI=mongodb://${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DATABASE}
-    - PORT=4000
-    - NODE_ENV=development
-    - JWT_SECRET=${JWT_SECRET}
-    - EXPORT_DIR=/app/exports/Device-list #명시적 경로 설정
+      - PORT=4000
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/devicerental
+      - JWT_SECRET=${JWT_SECRET}
+      - EXPORT_DIR=/app/exports/Device-list
     command: sh -c "sleep 20 && npm start"
     volumes:
-    - ./backend/exports/Device-list:/app/exports/Device-list  # 볼륨 매핑 추가
+      - ./backend/exports/Device-list:/app/exports/Device-list
     networks:
       - app-tier
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-    - "0.0.0.0:3000:3000"
+      - "0.0.0.0:3000:3000"
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://192.168.0.125:4000
+      - VITE_API_URL=http://backend:4000
     networks:
       - app-tier
+
 volumes:
   mongo-data:
+
 networks:
   app-tier:
     driver: bridge
