@@ -70,6 +70,14 @@ const ProtectedRoute = ({ element, isAdmin = false, isMobile }) => {
     return <div>Loading...</div>;
   }
 
+  // /register 경로 → 로그인 없이 접근 허용
+  if (location.pathname === '/register') {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ProtectedRoute: Allowing access to /register without login');
+    }
+    return element;
+  }
+
   if (!user) {
     if (process.env.NODE_ENV === 'development') {
       console.log('ProtectedRoute: Redirecting to /login due to user null');
