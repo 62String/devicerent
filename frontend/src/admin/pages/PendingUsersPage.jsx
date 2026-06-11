@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { XIcon } from '../../components/Icons';
+import { getApiUrl } from '../../utils/api';
 
 function PendingUsersPage() {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -11,7 +12,7 @@ function PendingUsersPage() {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     const fetchPendingUsers = async () => {

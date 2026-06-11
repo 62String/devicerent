@@ -35,6 +35,7 @@ services:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://mongo:27017/devicerental
       - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - EXPORT_DIR=/app/exports/Device-list
     command: sh -c "sleep 20 && npm start"
     volumes:

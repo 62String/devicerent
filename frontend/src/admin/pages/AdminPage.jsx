@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
+import { getApiUrl } from '../../utils/api';
 import { DownloadIcon } from '../../components/Icons';
 
 function AdminPage() {
@@ -10,7 +11,7 @@ function AdminPage() {
   const [message, setMessage] = useState('');
   const [downloadLink, setDownloadLink] = useState('');
   const [lastRetentionCheck, setLastRetentionCheck] = useState(null);
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
   const token = localStorage.getItem('token');
 
   useEffect(() => {

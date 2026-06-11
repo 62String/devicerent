@@ -4,6 +4,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ko } from 'date-fns/locale';
 import { SearchIcon, DownloadIcon } from '../../components/Icons';
+import { getApiUrl } from '../../utils/api';
 
 const TYPE_BADGE = {
   retention: { label: '보존정책', className: 'badge badge-warn' },
@@ -22,7 +23,7 @@ function ExportHistory() {
   const [startDate, setStartDate] = useState(new Date('2020-01-01'));
   const [endDate, setEndDate] = useState(null);
   const perPage = 50;
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
   const token = localStorage.getItem('token');
 
   const fetchExportHistory = async () => {

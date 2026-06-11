@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../utils/AuthContext';
+import { getApiUrl } from '../../utils/api';
 import { SearchIcon, XIcon } from '../../components/Icons';
 
 const formatOs = (osName, osVersion) => {
@@ -31,7 +32,7 @@ const DeviceStatus = () => {
   const [selectedRemark, setSelectedRemark] = useState('');
   const [selectedSerial, setSelectedSerial] = useState('');
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     if (!token) {

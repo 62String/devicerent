@@ -101,8 +101,30 @@ describe('Devices API - Rent Tests (POST /api/devices/rent-device)', () => {
       .post('/api/devices/rent-device')
       .set('Authorization', `Bearer ${userToken}`)
       .send({ deviceId: 'TEST001', remark: 'Test rent 2' });
-    expect(secondResponse.status).toBe(400);
+    expect(secondResponse.status).toBe(409);
     expect(secondResponse.body.message).toBe('Device already rented');
+  }, 10000);
+
+  it('should allow only one concurrent rent request for the same device', async () => {
+    const [firstResponse, secondResponse] = await Promise.all([
+      request(app)
+        .post('/api/devices/rent-device')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ deviceId: 'TEST001', remark: 'Concurrent rent 1' }),
+      request(app)
+        .post('/api/devices/rent-device')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ deviceId: 'TEST001', remark: 'Concurrent rent 2' })
+    ]);
+
+    const statuses = [firstResponse.status, secondResponse.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const device = await Device.findOne({ serialNumber: 'TEST001' });
+    expect(device.rentedBy).toMatchObject({ name: 'Test User', affiliation: 'Test Org' });
+
+    const historyCount = await RentalHistory.countDocuments({ serialNumber: 'TEST001', action: 'rent' });
+    expect(historyCount).toBe(1);
   }, 10000);
 
   it('should handle special characters in remark', async () => {

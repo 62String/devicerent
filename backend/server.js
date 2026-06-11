@@ -4,7 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const xlsx = require('xlsx');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET, ALLOWED_ORIGINS, isAllowedOrigin } = require('./config');
 const { verifyToken } = require('./utils/auth');
+const { adminAuth } = require('./routes/middleware');
 const RentalHistory = require('./models/RentalHistory');
 const ExportHistory = require('./models/ExportHistory');
 const Device = require('./models/Device');
@@ -20,9 +22,8 @@ log('Starting backend server...');
 
 app.use(cors({
   origin: (origin, callback) => {
-    // 허용할 Origin 명시
-    const allowedOrigins = ['http://192.168.0.125:3000', 'http://localhost:3000'];
-    if (!origin || allowedOrigins.includes(origin)) {
+    // ALLOWED_ORIGINS와 사내 private IP 프론트엔드 origin을 허용
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -41,6 +42,7 @@ app.use((req, res, next) => {
 });
 
 log('Loading routes...');
+log('Configured allowed origins:', ALLOWED_ORIGINS);
 
 const authRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/auth') : null;
 const deviceRoutes = process.env.NODE_ENV !== 'test' ? require('./routes/devices') : null;
@@ -355,14 +357,8 @@ const initDevices = async (force = false, exportPath = null) => {
   }
 };
 
-app.post('/api/admin/init-devices', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+app.post('/api/admin/init-devices', adminAuth, async (req, res) => {
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    const user = await User.findOne({ id: decoded.id, isAdmin: true });
-    if (!user) return res.status(403).json({ message: 'Admin access required' });
-
     const { exportPath } = req.body;
     await initDevices(false, exportPath);
     res.json({ message: 'Device initialization completed' });
@@ -376,14 +372,8 @@ app.post('/api/admin/init-devices', async (req, res) => {
   }
 });
 
-app.post('/api/admin/clear-invalid-devices', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+app.post('/api/admin/clear-invalid-devices', adminAuth, async (req, res) => {
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    const user = await User.findOne({ id: decoded.id, isAdmin: true });
-    if (!user) return res.status(403).json({ message: 'Admin access required' });
-
     const { exportPath } = req.body;
     const devices = await Device.find();
     const invalidDevices = [];
@@ -423,14 +413,8 @@ app.post('/api/admin/clear-invalid-devices', async (req, res) => {
   }
 });
 
-app.get('/api/admin/verify-data-integrity', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+app.get('/api/admin/verify-data-integrity', adminAuth, async (req, res) => {
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
-    const user = await User.findOne({ id: decoded.id, isAdmin: true });
-    if (!user) return res.status(403).json({ message: 'Admin access required' });
-
     const devices = await Device.find();
     const issues = [];
     const serialNumbers = new Set();
@@ -571,7 +555,7 @@ app.get('/api/data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    const decoded = await verifyToken(token, JWT_SECRET);
     const user = await User.findOne({ id: decoded.id });
     if (!user || user.isPending)
       return res.status(403).json({ message: 'Access denied' });
@@ -590,7 +574,7 @@ app.get('/api/me', async (req, res) => {
     return res.status(401).json({ message: 'No token provided' });
   }
   try {
-    const decoded = await verifyToken(token, process.env.JWT_SECRET || '비밀열쇠12345678');
+    const decoded = await verifyToken(token, JWT_SECRET);
     log('Decoded token:', decoded);
     const user = await User.findOne({ id: decoded.id });
     if (!user) {

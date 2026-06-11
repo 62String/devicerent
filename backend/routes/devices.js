@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer'); // Multer 추가
 
-const JWT_SECRET = process.env.JWT_SECRET || '비밀열쇠12345678';
+const { JWT_SECRET } = require('../config');
 const DB_RETENTION_LIMIT = 1000 * 60 * 60 * 24 * 365 * 2; // 2년 (밀리초)
 const DB_SIZE_LIMIT = 0.95; // 95% 임계점
 const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, '..', 'exports', 'Device-list');
@@ -558,12 +558,6 @@ router.post('/rent-device', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId, remark = '' } = req.body;
-    const device = await Device.findOne({ serialNumber: deviceId });
-    if (!device) return res.status(404).json({ message: "Device not found" });
-    if (device.rentedBy) return res.status(400).json({ message: "Device already rented" });
-    if (device.status !== 'active') {
-      return res.status(400).json({ message: `Device is not available (${device.status}${device.statusReason ? `: ${device.statusReason}` : ''})` });
-    }
 
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -571,10 +565,26 @@ router.post('/rent-device', async (req, res) => {
       return res.status(400).json({ message: "User name or affiliation is incomplete" });
     }
 
-    device.rentedBy = { name: user.name, affiliation: user.affiliation };
-    device.rentedAt = new Date();
-    device.remark = remark;
-    await device.save();
+    const rentedAt = new Date();
+    const device = await Device.findOneAndUpdate(
+      { serialNumber: deviceId, rentedBy: null, status: 'active' },
+      {
+        $set: {
+          rentedBy: { name: user.name, affiliation: user.affiliation },
+          rentedAt,
+          remark
+        }
+      },
+      { new: true }
+    );
+
+    if (!device) {
+      const currentDevice = await Device.findOne({ serialNumber: deviceId }).lean();
+      if (!currentDevice) return res.status(404).json({ message: "Device not found" });
+      if (currentDevice.rentedBy) return res.status(409).json({ message: "Device already rented" });
+      return res.status(400).json({ message: `Device is not available (${currentDevice.status}${currentDevice.statusReason ? `: ${currentDevice.statusReason}` : ''})` });
+    }
+
     const deviceInfo = {
       modelName: device.modelName,
       osName: device.osName,
@@ -588,7 +598,7 @@ router.post('/rent-device', async (req, res) => {
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
       deviceInfo: deviceInfo,
       remark: remark,
-      timestamp: new Date()
+      timestamp: rentedAt
     };
     await RentalHistory.create(historyData);
     res.json({ message: "Device rented successfully" });
@@ -615,21 +625,11 @@ router.post('/return-device', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId, status = 'active', statusReason = '' } = req.body;
     console.log('Return request for deviceId:', deviceId);
-    const device = await Device.findOne({ serialNumber: deviceId });
-    if (!device) return res.status(404).json({ message: "Device not found" });
-    console.log('Found device:', device);
-    if (!device.rentedBy) return res.status(400).json({ message: "Device is not rented" });
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
     if (!user.name || !user.affiliation || user.name.trim() === '' || user.affiliation.trim() === '') {
       return res.status(400).json({ message: "User name or affiliation is incomplete" });
     }
-
-    if (device.rentedBy.name !== user.name) {
-      return res.status(403).json({ message: "Cannot return this device" });
-    }
-
-
 
     // status 값 유효성 검사
     const validStatuses = ['active', 'repair', 'inactive'];
@@ -637,6 +637,28 @@ router.post('/return-device', async (req, res) => {
     if (!validStatuses.includes(normalizedStatus)) {
       return res.status(400).json({ message: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
     }
+
+    const device = await Device.findOneAndUpdate(
+      { serialNumber: deviceId, 'rentedBy.name': user.name },
+      {
+        $set: {
+          rentedBy: null,
+          rentedAt: null,
+          status: normalizedStatus,
+          statusReason: statusReason
+        }
+      },
+      { new: false }
+    );
+
+    if (!device) {
+      const currentDevice = await Device.findOne({ serialNumber: deviceId }).lean();
+      if (!currentDevice) return res.status(404).json({ message: "Device not found" });
+      if (!currentDevice.rentedBy) return res.status(400).json({ message: "Device is not rented" });
+      return res.status(403).json({ message: "Cannot return this device" });
+    }
+
+    console.log('Found device:', device);
 
     const deviceInfo = {
       modelName: device.modelName,
@@ -668,11 +690,6 @@ router.post('/return-device', async (req, res) => {
       performedBy: user.name || 'Unknown'
     });
 
-    device.rentedBy = null;
-    device.rentedAt = null;
-    device.status = normalizedStatus;
-    device.statusReason = statusReason;
-    await device.save();
     res.json({ message: "Device returned successfully" });
   } catch (error) {
     console.error('Return error:', error);

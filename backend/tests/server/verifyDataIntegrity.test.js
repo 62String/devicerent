@@ -84,7 +84,7 @@ describe('GET /api/admin/verify-data-integrity', () => {
   it('should return 401 if no token is provided', async () => {
     const res = await request(app).get('/api/admin/verify-data-integrity');
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('No token provided');
+    expect(res.body.message).toBe('토큰이 없습니다.');
   });
 
   it('should return 403 if user is not admin', async () => {
@@ -96,6 +96,6 @@ describe('GET /api/admin/verify-data-integrity', () => {
       .set('Authorization', userToken);
 
     expect(res.status).toBe(403);
-    expect(res.body.message).toBe('Admin access required');
+    expect(res.body.message).toBe('관리자 권한이 필요합니다.');
   });
 });

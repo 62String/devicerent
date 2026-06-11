@@ -138,30 +138,23 @@ describe('server endpoints', () => {
   });
 
   it('should initialize devices via POST /api/admin/init-devices', async () => {
-    const mockExcelData = [
-      {
-        '시리얼 번호': 'TEST002',
-        '디바이스 정보': 'Admin Device',
-        '모델명': 'Model2',
-        'OS 이름': 'AOS',
-        'OS 버전': '14',
-        '대여자': '없음',
-        '대여일시': '없음',
-      },
-    ];
+    const HEADER_ROW = { '번호': '번호', '식별번호': '식별번호', '기기명': '기기명', 'OS버전': 'OS버전' };
     const mockDevices = [
       {
         serialNumber: 'TEST002',
         deviceInfo: 'Admin Device',
-        modelName: 'Model2',
-        osName: 'AOS',
+        modelName: 'Admin Device',
+        osName: 'Android',
         osVersion: '14',
         status: 'active',
         rentedBy: null,
         rentedAt: null,
       },
     ];
-    xlsx.utils.sheet_to_json.mockReturnValue(mockExcelData);
+    xlsx.readFile.mockReturnValue({ Sheets: { AOS: {}, iOS: {} }, SheetNames: ['AOS', 'iOS'] });
+    xlsx.utils.sheet_to_json
+      .mockReturnValueOnce([HEADER_ROW, { '번호': 1, '식별번호': 'TEST002', '기기명': 'Admin Device', 'OS버전': '14' }])
+      .mockReturnValueOnce([HEADER_ROW]);
     require('../../models/Device').find.mockResolvedValue([]);
     require('../../models/Device').insertMany.mockResolvedValue(mockDevices);
     require('../../models/ExportHistory').create.mockResolvedValue({
@@ -190,7 +183,7 @@ describe('server endpoints', () => {
       .send({ exportPath: 'test.xlsx' });
 
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('No token provided');
+    expect(res.body.message).toBe('토큰이 없습니다.');
   });
 
   it('should clear invalid devices and re-sync via POST /api/admin/clear-invalid-devices', async () => {
@@ -198,24 +191,14 @@ describe('server endpoints', () => {
       { serialNumber: 'INVALID', osName: '', deviceInfo: 'Invalid Device' },
       { serialNumber: 'TEST001', osName: 'AOS', deviceInfo: 'Test Device', osVersion: '14', modelName: 'TestDevice' },
     ];
-    const mockExcelData = [
-      {
-        '시리얼 번호': 'TEST001',
-        '디바이스 정보': 'Test Device',
-        'OS 이름': 'AOS',
-        'OS 버전': '14',
-        '모델명': 'TestDevice',
-        '대여자': '없음',
-        '대여일시': '없음',
-      },
-    ];
+    const HEADER_ROW = { '번호': '번호', '식별번호': '식별번호', '기기명': '기기명', 'OS버전': 'OS버전' };
     const mockInsertedDevices = [
       {
         serialNumber: 'TEST001',
         deviceInfo: 'Test Device',
-        osName: 'AOS',
+        osName: 'Android',
         osVersion: '14',
-        modelName: 'TestDevice',
+        modelName: 'Test Device',
         status: 'active',
         rentedBy: null,
         rentedAt: null,
@@ -230,7 +213,10 @@ describe('server endpoints', () => {
         : Promise.resolve([]); // 두 번째 호출: 삭제 후 빈 데이터
     });
     require('../../models/Device').deleteMany.mockResolvedValue({ deletedCount: 1 });
-    xlsx.utils.sheet_to_json.mockReturnValue(mockExcelData);
+    xlsx.readFile.mockReturnValue({ Sheets: { AOS: {}, iOS: {} }, SheetNames: ['AOS', 'iOS'] });
+    xlsx.utils.sheet_to_json
+      .mockReturnValueOnce([HEADER_ROW, { '번호': 1, '식별번호': 'TEST001', '기기명': 'Test Device', 'OS버전': '14' }])
+      .mockReturnValueOnce([HEADER_ROW]);
     require('../../models/Device').insertMany.mockResolvedValue(mockInsertedDevices);
     require('../../models/ExportHistory').create.mockResolvedValue({
       filePath: '/exports/test.xlsx',
@@ -258,7 +244,7 @@ describe('server endpoints', () => {
       .send({ exportPath: 'test.xlsx' });
 
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('No token provided');
+    expect(res.body.message).toBe('토큰이 없습니다.');
   });
 
   it('should return 200 with no issues for GET /api/admin/verify-data-integrity if data is valid', async () => {

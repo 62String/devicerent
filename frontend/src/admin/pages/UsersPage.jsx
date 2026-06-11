@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { SearchIcon, XIcon } from '../../components/Icons';
+import { getApiUrl } from '../../utils/api';
 
 function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -15,7 +16,7 @@ function UsersPage() {
   const [sortOrder, setSortOrder] = useState('asc');
   const usersPerPage = 50;
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     fetchUsers();

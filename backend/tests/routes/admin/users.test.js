@@ -26,8 +26,8 @@ const request = require('supertest');
         socketTimeoutMS: 60000,
         connectTimeoutMS: 60000
       });
-      adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, 'your-secret-key', { expiresIn: '1h' });
-      userToken = jwt.sign({ id: 'pending-user', isAdmin: false }, 'your-secret-key', { expiresIn: '1h' });
+      adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      userToken = jwt.sign({ id: 'pending-user', isAdmin: false }, process.env.JWT_SECRET, { expiresIn: '1h' });
     }, 60000);
 
     afterAll(async () => {

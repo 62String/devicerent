@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../utils/AuthContext';
+import { getApiUrl } from '../utils/api';
 import { DeviceIcon } from '../components/Icons';
 
 const MobileLogin = () => {
@@ -10,7 +11,7 @@ const MobileLogin = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { setUser, user } = useAuth();
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     if (user) {

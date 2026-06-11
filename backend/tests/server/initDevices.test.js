@@ -45,28 +45,30 @@ describe('initDevices', () => {
     await mongoose.connection.close();
   });
 
+  // 현재 initDevices 계약: AOS/iOS 시트를 동적으로 찾고,
+  // sheet_to_json은 ① 파일 선택 프로브 ② AOS 시트 ③ iOS 시트 순으로 호출됨 (②③은 헤더 행 포함)
+  const HEADER_ROW = { '번호': '번호', '식별번호': '식별번호', '기기명': '기기명', 'OS버전': 'OS버전' };
+
+  const mockExcel = (androidRows, iosRows = []) => {
+    xlsx.readFile.mockReturnValue({ Sheets: { AOS: {}, iOS: {} }, SheetNames: ['AOS', 'iOS'] });
+    xlsx.utils.sheet_to_json
+      .mockReturnValueOnce([{ probe: true }])
+      .mockReturnValueOnce([HEADER_ROW, ...androidRows])
+      .mockReturnValueOnce([HEADER_ROW, ...iosRows]);
+  };
+
   beforeEach(async () => {
     await Device.deleteMany({});
     fs.writeFileSync.mockReset();
     fs.existsSync.mockReturnValue(true);
     fs.readdirSync.mockReturnValue(['test.xlsx']);
-    xlsx.readFile.mockReturnValue({ Sheets: { Sheet1: {} }, SheetNames: ['Sheet1'] });
-    xlsx.utils.sheet_to_json.mockClear();
+    xlsx.utils.sheet_to_json.mockReset();
   });
 
   it('should initialize devices from excel file', async () => {
-    const mockDevices = [
-      {
-        '시리얼 번호': 'TEST001',
-        '디바이스 정보': 'Test Device',
-        '모델명': 'TestDevice',
-        'OS 이름': 'AOS',
-        'OS 버전': '14',
-        '대여자': '없음',
-        '대여일시': '없음',
-      },
-    ];
-    xlsx.utils.sheet_to_json.mockReturnValue(mockDevices);
+    mockExcel([
+      { '번호': 1, '식별번호': 'TEST001', '기기명': 'Test Device', 'OS버전': '14' },
+    ]);
     await Device.create({
       serialNumber: 'EXISTING001',
       deviceInfo: 'Existing Device',
@@ -81,14 +83,14 @@ describe('initDevices', () => {
     const devices = await Device.find({ serialNumber: 'TEST001' });
     expect(devices.length).toBe(1);
     expect(devices[0].serialNumber).toBe('TEST001');
+    expect(devices[0].osName).toBe('Android');
     expect(fs.writeFileSync).toHaveBeenCalled();
   });
 
   it('should skip invalid devices from excel file and insert none', async () => {
-    const mockInvalidDevices = [
-      { '시리얼 번호': '', '디바이스 정보': 'Invalid Device', 'OS 이름': 'AOS', 'OS 버전': '14' },
-    ];
-    xlsx.utils.sheet_to_json.mockReturnValue(mockInvalidDevices);
+    mockExcel([
+      { '번호': 1, '식별번호': '', '기기명': 'Invalid Device', 'OS버전': '14' },
+    ]);
 
     await initDevices(false);
 
@@ -120,10 +122,10 @@ describe('initDevices', () => {
     await expect(initDevices(false)).rejects.toThrow(/Invalid devices found/);
   });
 
-  it('should do nothing if no excel files exist', async () => {
+  it('should throw if no excel files exist', async () => {
     fs.readdirSync.mockReturnValue([]);
 
-    await initDevices(false);
+    await expect(initDevices(false)).rejects.toThrow('No Excel files found in directory');
 
     const devices = await Device.find();
     expect(devices.length).toBe(0);

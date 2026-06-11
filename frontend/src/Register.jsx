@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { DeviceIcon } from './components/Icons';
+import { getApiUrl } from './utils/api';
 
 function Register() {
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     id: '',

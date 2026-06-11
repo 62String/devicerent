@@ -5,6 +5,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { ko } from 'date-fns/locale';
 import { saveAs } from 'file-saver';
 import { SearchIcon, XIcon, DownloadIcon } from '../../components/Icons';
+import { getApiUrl } from '../../utils/api';
 
 const formatOs = (osName, osVersion) => {
   if (!osName && !osVersion) return 'N/A';
@@ -33,7 +34,7 @@ function DeviceHistory() {
   const [perPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     let isMounted = true;

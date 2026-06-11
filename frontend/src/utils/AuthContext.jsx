@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { getApiUrl } from './api';
 
 const AuthContext = createContext();
 
@@ -52,7 +53,7 @@ export function AuthProvider({ children }) {
         }
 
         console.log('Fetching /api/me to validate token');
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/me`, {
+        const response = await axios.get(`${getApiUrl()}/api/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('AuthContext - /api/me Response:', response.data);

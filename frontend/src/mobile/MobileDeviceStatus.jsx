@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import BarcodeScanner from './BarcodeScanner';
 import { ScanIcon } from '../components/Icons';
+import { getApiUrl } from '../utils/api';
 
 const MobileDeviceStatus = () => {
   const location = useLocation();
@@ -10,7 +11,7 @@ const MobileDeviceStatus = () => {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

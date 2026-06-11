@@ -103,7 +103,7 @@ const request = require('supertest');
     beforeAll(async () => {
       // 실제 MongoDB 인스턴스에 연결
       await mongoose.connect('mongodb://localhost:27017/testdb');
-      adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, 'your-secret-key', { expiresIn: '1h' });
+      adminToken = jwt.sign({ id: 'admin-id', isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
     });
 
     afterAll(async () => {

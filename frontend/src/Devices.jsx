@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
+import { getApiUrl } from './utils/api';
 import { SearchIcon, XIcon } from './components/Icons';
 
 const formatOs = (osName, osVersion) => {
@@ -49,7 +50,7 @@ function Devices() {
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = getApiUrl();
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -392,7 +393,7 @@ function Devices() {
                         <td>
                           {rented ? (
                             <>
-                              <div className="td-sub">{rented.date.slice(5)}</div>
+                              <div className="td-sub">{rented.date}</div>
                               <div className="cell-sub">{rented.time}</div>
                             </>
                           ) : (

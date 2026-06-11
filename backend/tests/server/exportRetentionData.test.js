@@ -61,6 +61,7 @@ describe('exportRetentionData', () => {
   it('should export and delete retention data older than 2 years', async () => {
     const twoYearsAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2 - 1000);
     await RentalHistory.create({
+      deviceId: new mongoose.Types.ObjectId(),
       serialNumber: 'TEST001',
       timestamp: twoYearsAgo,
       action: 'rent',
@@ -91,6 +92,7 @@ describe('exportRetentionData', () => {
   it('should throw error if file write fails', async () => {
     const twoYearsAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 2 - 1000);
     await RentalHistory.create({
+      deviceId: new mongoose.Types.ObjectId(),
       serialNumber: 'TEST001',
       timestamp: twoYearsAgo,
       action: 'rent',

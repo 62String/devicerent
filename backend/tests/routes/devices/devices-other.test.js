@@ -14,10 +14,10 @@ app.use(express.json());
 const deviceRoutes = require('../../../routes/devices');
 app.use('/api/devices', deviceRoutes);
 
-// verifyToken 모킹 (비동기 함수로 설정)
+// verifyToken 모킹 — manage/delete(adminAuth) 경유용 관리자 사용자
 jest.mock('../../../utils/auth', () => ({
   verifyToken: jest.fn().mockImplementation((token, secret) => {
-    return Promise.resolve({ id: 'test-user', isAdmin: false }); // 비동기 함수로 Promise 반환
+    return Promise.resolve({ id: 'test-user', isAdmin: true });
   }),
 }));
 
@@ -52,10 +52,10 @@ beforeEach(async () => {
     id: 'test-user',
     name: 'Test User',
     affiliation: 'Test Org',
-    position: '연구원',
+    position: '팀장',
     password: 'testpassword',
     isPending: false,
-    isAdmin: false,
+    isAdmin: true,
   });
 
   // User 생성 확인
@@ -86,52 +86,51 @@ beforeEach(async () => {
 
   // DB 반영 대기
   await mongoose.connection.db.command({ ping: 1 }); // DB 연결 상태 확인
-  await new Promise(resolve => setTimeout(resolve, 3000)); // 추가 대기 시간
 });
 
-describe('Devices API - Other Tests (PATCH and DELETE /api/devices)', () => {
+describe('Devices API - manage endpoints (update-status / delete)', () => {
   let userToken;
 
   beforeAll(() => {
-    userToken = jwt.sign({ id: 'test-user', isAdmin: false }, '비밀열쇠12345678', { expiresIn: '1h' });
+    userToken = jwt.sign({ id: 'test-user', isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
   });
 
-  describe('PATCH /api/devices', () => {
+  describe('POST /api/devices/manage/update-status', () => {
     it('should update device status successfully', async () => {
       const res = await request(app)
-        .patch('/api/devices')
+        .post('/api/devices/manage/update-status')
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ deviceId: 'TEST001', status: 'inactive' });
+        .send({ serialNumber: 'TEST001', status: 'inactive', statusReason: '테스트 사유' });
       expect(res.status).toBe(200);
-      expect(res.body.message).toBe('Device updated successfully');
+      expect(res.body.message).toBe('Device status updated successfully');
       const device = await Device.findOne({ serialNumber: 'TEST001' });
       expect(device.status).toBe('inactive');
     });
 
     it('should return 401 if no token provided', async () => {
       const res = await request(app)
-        .patch('/api/devices')
-        .send({ deviceId: 'TEST001', status: 'inactive' });
+        .post('/api/devices/manage/update-status')
+        .send({ serialNumber: 'TEST001', status: 'inactive' });
       expect(res.status).toBe(401);
       expect(res.body.message).toBe('No token provided');
     });
 
     it('should return 404 if device not found', async () => {
       const res = await request(app)
-        .patch('/api/devices')
+        .post('/api/devices/manage/update-status')
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ deviceId: 'INVALID', status: 'inactive' });
+        .send({ serialNumber: 'INVALID', status: 'inactive' });
       expect(res.status).toBe(404);
       expect(res.body.message).toBe('Device not found');
     });
   });
 
-  describe('DELETE /api/devices', () => {
+  describe('POST /api/devices/manage/delete', () => {
     it('should delete device successfully', async () => {
       const res = await request(app)
-        .delete('/api/devices')
+        .post('/api/devices/manage/delete')
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ deviceId: 'TEST001' });
+        .send({ serialNumber: 'TEST001' });
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Device deleted successfully');
       const device = await Device.findOne({ serialNumber: 'TEST001' });
@@ -140,17 +139,17 @@ describe('Devices API - Other Tests (PATCH and DELETE /api/devices)', () => {
 
     it('should return 401 if no token provided', async () => {
       const res = await request(app)
-        .delete('/api/devices')
-        .send({ deviceId: 'TEST001' });
+        .post('/api/devices/manage/delete')
+        .send({ serialNumber: 'TEST001' });
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe('No token provided');
+      expect(res.body.message).toBe('토큰이 없습니다.');
     });
 
     it('should return 404 if device not found', async () => {
       const res = await request(app)
-        .delete('/api/devices')
+        .post('/api/devices/manage/delete')
         .set('Authorization', `Bearer ${userToken}`)
-        .send({ deviceId: 'INVALID' });
+        .send({ serialNumber: 'INVALID' });
       expect(res.status).toBe(404);
       expect(res.body.message).toBe('Device not found');
     });

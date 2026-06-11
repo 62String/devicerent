@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
+import { getApiUrl } from './utils/api';
 import { getTheme, toggleTheme } from './utils/theme';
 import { DeviceIcon, MoonIcon, SunIcon } from './components/Icons';
 
@@ -12,7 +13,7 @@ function Login() {
   const [theme, setTheme] = useState(getTheme());
   const navigate = useNavigate();
   const { setUser } = useAuth();
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     if (error) {

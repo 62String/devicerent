@@ -159,6 +159,7 @@ describe('Auth API', () => {
         id: 'test-user',
         name: 'Test User',
         affiliation: 'Test Org',
+        position: '센터장',
         isPending: false,
         isAdmin: true
       });

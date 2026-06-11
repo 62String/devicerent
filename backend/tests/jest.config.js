@@ -2,6 +2,7 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/tests/**/*.test.js'],
   rootDir: '..',
+  setupFiles: ['<rootDir>/tests/jest.setenv.js'],
   coveragePathIgnorePatterns: [
     '/tests/',
     '/tests/routes/',

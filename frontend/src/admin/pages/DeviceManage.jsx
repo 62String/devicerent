@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../utils/AuthContext';
+import { getApiUrl } from '../../utils/api';
 import { SearchIcon, XIcon, DownloadIcon, RefreshIcon, ClockIcon } from '../../components/Icons';
 
 const STATUS_BADGE = {
@@ -44,7 +45,7 @@ const DeviceManage = () => {
   const devicesPerPage = 50;
   const historyPerPage = 50;
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
+  const apiUrl = getApiUrl();
 
   useEffect(() => {
     fetchDevices();
