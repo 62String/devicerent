@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { DeviceIcon } from './components/Icons';
 
 function Register() {
   const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
@@ -16,28 +17,23 @@ function Register() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormValid, setIsFormValid] = useState(false);
-  const [isIdChecked, setIsIdChecked] = useState(false); // 중복 체크 상태
-  const [touched, setTouched] = useState({}); // 입력 시작 여부 추적
+  const [isIdChecked, setIsIdChecked] = useState(false);
+  const [idCheckMessage, setIdCheckMessage] = useState('');
+  const [touched, setTouched] = useState({});
 
   const validateId = (id) => {
     const allowedChars = /^[a-zA-Z0-9_@.\-]+$/;
-    const valid = allowedChars.test(id.trim()) && id.trim().length >= 3;
-    console.log('validateId:', id, 'Valid:', valid);
-    return valid;
+    return allowedChars.test(id.trim()) && id.trim().length >= 3;
   };
 
   const validateName = (value) => {
     const allowedChars = /^[가-힣a-zA-Z]+$/;
-    const valid = allowedChars.test(value.trim()) && value.trim().length >= 2;
-    console.log('validateName:', value, 'Valid:', valid);
-    return valid;
+    return allowedChars.test(value.trim()) && value.trim().length >= 2;
   };
 
   const validateAffiliation = (value) => {
     const allowedChars = /^[가-힣a-zA-Z0-9\s]+$/;
-    const valid = allowedChars.test(value.trim()) && value.trim().length >= 2;
-    console.log('validateAffiliation:', value, 'Valid:', valid);
-    return valid;
+    return allowedChars.test(value.trim()) && value.trim().length >= 2;
   };
 
   const validateForm = () => {
@@ -57,56 +53,52 @@ function Register() {
     }
     setErrors(newErrors);
 
-    const valid = idValid && passwordMatch && nameValid && affiliationValid && isIdChecked;
-    console.log('validateForm - Form valid:', valid, 'Errors:', newErrors, 'isIdChecked:', isIdChecked);
-    return valid;
+    return idValid && passwordMatch && nameValid && affiliationValid && isIdChecked;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    console.log('handleChange - Field:', name, 'Value:', value);
     setFormData((prevFormData) => ({
       ...prevFormData,
       [name]: value
     }));
-    setTouched((prev) => ({ ...prev, [name]: true })); // 입력 시작 표시
+    setTouched((prev) => ({ ...prev, [name]: true }));
+    if (name === 'id') {
+      setIsIdChecked(false);
+      setIdCheckMessage('');
+    }
     setIsFormValid(validateForm());
   };
 
   const handleIdCheck = async () => {
     if (!formData.id) {
       setErrors((prev) => ({ ...prev, id: '아이디를 입력해주세요' }));
-      alert('아이디를 입력해주세요.');
       return;
     }
     if (!validateId(formData.id)) {
       setErrors((prev) => ({ ...prev, id: '아이디는 영어, 숫자, _, -, @, .만 사용 가능, 최소 3자 이상' }));
-      alert('아이디는 영어, 숫자, _, -, @, .만 사용 가능하며 최소 3자 이상이어야 합니다.');
       return;
     }
     try {
-      console.log('Checking ID availability:', formData.id);
       const response = await axios.post(`${apiUrl}/api/auth/check-id`, { id: formData.id });
-      console.log('ID check response:', response.data);
       if (response.data.available) {
         setIsIdChecked(true);
         setErrors((prev) => ({ ...prev, id: '' }));
-        alert('사용 가능한 아이디입니다.');
+        setIdCheckMessage('사용 가능한 아이디입니다.');
       } else {
         setIsIdChecked(false);
+        setIdCheckMessage('');
         setErrors((prev) => ({ ...prev, id: '이미 사용 중인 아이디입니다.' }));
-        alert('이미 사용 중인 아이디입니다.');
       }
     } catch (error) {
-      console.error('ID check error:', error.response?.data || error.message);
+      setIsIdChecked(false);
+      setIdCheckMessage('');
       setErrors((prev) => ({ ...prev, id: '아이디 확인 중 오류가 발생했습니다.' }));
-      alert('아이디 확인 중 오류가 발생했습니다.');
     }
     setIsFormValid(validateForm());
   };
 
   useEffect(() => {
-    console.log('useEffect - Current formData:', formData, 'Touched:', touched);
     if (Object.keys(touched).length > 0) {
       setIsFormValid(validateForm());
     }
@@ -116,13 +108,11 @@ function Register() {
     e.preventDefault();
     if (isSubmitting) return;
     if (!isFormValid) {
-      console.log('Form submission blocked - Invalid form:', errors);
-      setTouched({ id: true, password: true, name: true, affiliation: true }); // 모든 필드 터치로 간주
+      setTouched({ id: true, password: true, name: true, affiliation: true });
       setIsFormValid(validateForm());
       return;
     }
     setIsSubmitting(true);
-    console.log('Submitting form data:', formData);
     try {
       const response = await axios.post(`${apiUrl}/api/auth/register`, formData, {
         headers: { 'Content-Type': 'application/json' }
@@ -130,112 +120,131 @@ function Register() {
       alert(response.data.message);
       navigate('/login');
     } catch (error) {
-      console.error('Register error:', error.response?.data || error.message);
       setErrors({ submit: error.response?.data?.message || '회원가입에 실패했습니다. 다시 시도해 주세요.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const fieldError = (key) =>
+    errors[key] ? <p className="text-xs mt-1 mb-0" style={{ color: 'var(--danger)' }}>{errors[key]}</p> : null;
+
   return (
-    <div style={{ maxWidth: '400px', margin: '0 auto', padding: '20px' }}>
-      <h2>회원가입</h2>
-      {errors.submit && <p style={{ color: 'red' }}>{errors.submit}</p>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>아이디:</label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input
-              type="text"
-              name="id"
-              value={formData.id}
-              onChange={handleChange}
-              placeholder="아이디는 영어, 숫자, _, -, @, .만 사용 가능, 최소 3자 이상"
-              required
-              style={{ width: '70%', padding: '8px' }}
-            />
-            <button
-              type="button"
-              onClick={handleIdCheck}
-              style={{ padding: '8px 16px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-            >
-              중복 체크
-            </button>
+    <div className="min-h-screen bg-paper flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-[420px]">
+        <div className="flex items-center justify-center gap-2 mb-6 text-ink">
+          <DeviceIcon size={22} />
+          <span className="text-xl font-bold tracking-tight">DeviceRent</span>
+        </div>
+        <div className="card" style={{ borderTop: '2px solid var(--ink)' }}>
+          <div className="p-6">
+            <h1 className="text-lg font-bold text-ink mb-1">가입 신청</h1>
+            <p className="text-xs text-sub mb-5">가입 후 관리자 승인이 완료되면 로그인할 수 있습니다</p>
+            {errors.submit && <div className="alert alert-error">{errors.submit}</div>}
+            <form onSubmit={handleSubmit}>
+              <label className="field-label" htmlFor="reg-id">아이디</label>
+              <div className="flex gap-2 mb-1">
+                <input
+                  id="reg-id"
+                  type="text"
+                  name="id"
+                  value={formData.id}
+                  onChange={handleChange}
+                  placeholder="영어, 숫자, _ - @ . / 3자 이상"
+                  required
+                  className="input flex-1"
+                />
+                <button type="button" onClick={handleIdCheck} className="btn btn-outline">중복 확인</button>
+              </div>
+              {fieldError('id')}
+              {isIdChecked && idCheckMessage && (
+                <p className="text-xs mt-1 mb-0" style={{ color: 'var(--ok)' }}>{idCheckMessage}</p>
+              )}
+
+              <label className="field-label mt-3" htmlFor="reg-pw">비밀번호</label>
+              <input
+                id="reg-pw"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="최소 6자 이상"
+                required
+                className="input w-full"
+              />
+              {fieldError('password')}
+
+              <label className="field-label mt-3" htmlFor="reg-pw2">비밀번호 확인</label>
+              <input
+                id="reg-pw2"
+                type="password"
+                name="passwordConfirm"
+                value={formData.passwordConfirm}
+                onChange={handleChange}
+                placeholder="비밀번호 재입력"
+                required
+                className="input w-full"
+              />
+
+              <label className="field-label mt-3" htmlFor="reg-name">이름</label>
+              <input
+                id="reg-name"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="이름"
+                required
+                className="input w-full"
+              />
+              {fieldError('name')}
+
+              <div className="flex gap-2 mt-3">
+                <div className="flex-1">
+                  <label className="field-label" htmlFor="reg-affiliation">소속</label>
+                  <input
+                    id="reg-affiliation"
+                    type="text"
+                    name="affiliation"
+                    value={formData.affiliation}
+                    onChange={handleChange}
+                    placeholder="예) QA 2팀"
+                    required
+                    className="input w-full"
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="reg-position">직급</label>
+                  <select
+                    id="reg-position"
+                    name="position"
+                    value={formData.position}
+                    onChange={handleChange}
+                    required
+                    className="input"
+                  >
+                    <option value="연구원">연구원</option>
+                    <option value="파트장">파트장</option>
+                    <option value="팀장">팀장</option>
+                  </select>
+                </div>
+              </div>
+              {fieldError('affiliation')}
+
+              <button
+                type="submit"
+                className="btn btn-ink w-full mt-5"
+                disabled={!isFormValid || isSubmitting}
+              >
+                {isSubmitting ? '신청 중...' : '가입 신청'}
+              </button>
+            </form>
           </div>
-          {errors.id && <p style={{ color: 'red', fontSize: '12px' }}>{errors.id}</p>}
         </div>
-        <div>
-          <label>비밀번호:</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="비밀번호 (최소 6자 이상)"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
-          {errors.password && <p style={{ color: 'red', fontSize: '12px' }}>{errors.password}</p>}
-        </div>
-        <div>
-          <label>비밀번호 확인:</label>
-          <input
-            type="password"
-            name="passwordConfirm"
-            value={formData.passwordConfirm}
-            onChange={handleChange}
-            placeholder="비밀번호 확인"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
-        </div>
-        <div>
-          <label>이름:</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="이름"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
-          {errors.name && <p style={{ color: 'red', fontSize: '12px' }}>{errors.name}</p>}
-        </div>
-        <div>
-          <label>소속:</label>
-          <input
-            type="text"
-            name="affiliation"
-            value={formData.affiliation}
-            onChange={handleChange}
-            placeholder="소속"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
-          {errors.affiliation && <p style={{ color: 'red', fontSize: '12px' }}>{errors.affiliation}</p>}
-        </div>
-        <div>
-          <label>직급:</label>
-          <select
-            name="position"
-            value={formData.position}
-            onChange={handleChange}
-            required
-            style={{ margin: '10px 0', padding: '8px', width: '100px' }}
-          >
-            <option value="연구원">연구원</option>
-            <option value="파트장">파트장</option>
-            <option value="팀장">팀장</option>
-          </select>
-        </div>
-        <button type="submit" style={{ padding: '10px 20px' }} disabled={!isFormValid || isSubmitting}>
-          등록
-        </button>
-      </form>
-      <p>
-        계정이 있으신가요? <a href="/login">여기서 로그인</a>
-      </p>
+        <p className="text-center text-xs text-sub mt-4">
+          이미 계정이 있나요? <Link to="/login" className="link">로그인</Link>
+        </p>
+      </div>
     </div>
   );
 }

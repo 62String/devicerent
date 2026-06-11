@@ -1,26 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom'; // Link 임포트 추가
 import { useAuth } from '../../utils/AuthContext';
+import { SearchIcon, XIcon } from '../../components/Icons';
+
+const formatOs = (osName, osVersion) => {
+  if (!osName && !osVersion) return 'N/A';
+  if (!osVersion) return osName;
+  if (!osName || osVersion.toLowerCase().startsWith(osName.toLowerCase())) return osVersion;
+  return `${osName} ${osVersion}`;
+};
+
+const formatRentedAt = (rentedAt) => {
+  if (!rentedAt) return null;
+  const d = new Date(rentedAt);
+  if (isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+};
 
 const DeviceStatus = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [selectedRemark, setSelectedRemark] = useState('');
+  const [selectedSerial, setSelectedSerial] = useState('');
   const token = localStorage.getItem('token');
   const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
-  console.log('DeviceStatus initialized - token:', token);
-  console.log('DeviceStatus initialized - apiUrl:', apiUrl);
-
   useEffect(() => {
     if (!token) {
-      console.log('No token found, setting error');
       setError('토큰이 없습니다. 로그인 해 주세요.');
       return;
     }
@@ -29,159 +43,157 @@ const DeviceStatus = () => {
 
   const fetchStatus = async () => {
     try {
-      console.log('Fetching device status from:', `${apiUrl}/api/devices/status`);
       const response = await axios.get(`${apiUrl}/api/devices/status`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log('DeviceStatus fetchStatus response:', response.data);
       if (response.data && Array.isArray(response.data)) {
-        console.log('Data received, setting devices:', response.data);
         setDevices(response.data);
         setFilteredDevices(response.data);
       } else {
-        console.log('No valid data received, resetting devices');
         setDevices([]);
         setFilteredDevices([]);
       }
       setError(null);
     } catch (err) {
-      console.error('Error fetching device status:', err);
-      console.error('Error details:', err.response?.data || err.message);
       setError('디바이스 상태를 불러오지 못했습니다. 서버를 확인해 주세요.');
     }
   };
 
-  const handleSearch = () => {
-    console.log('Handling search with serial:', searchSerial);
-    if (!searchSerial.trim()) {
-      console.log('Search serial empty, resetting to all devices');
+  const handleSearch = (value) => {
+    setSearchSerial(value);
+    if (!value.trim()) {
       setFilteredDevices(devices);
       return;
     }
-    const filtered = devices.filter(device => 
-      device && device.serialNumber.toLowerCase().includes(searchSerial.toLowerCase())
+    const filtered = devices.filter(device =>
+      device && device.serialNumber.toLowerCase().includes(value.toLowerCase())
     );
-    console.log('Filtered devices:', filtered);
     setFilteredDevices(filtered);
   };
 
-  const handleReset = () => {
-    console.log('Resetting search');
-    setSearchSerial('');
-    setFilteredDevices(devices);
-  };
-
-  const openRemarkModal = (remark) => {
-    console.log('Opening remark modal with remark:', remark);
-    setSelectedRemark(remark);
+  const openRemarkModal = (device) => {
+    setSelectedRemark(device.remark);
+    setSelectedSerial(device.serialNumber);
     setShowRemarkModal(true);
   };
 
   const closeRemarkModal = () => {
-    console.log('Closing remark modal');
     setShowRemarkModal(false);
     setSelectedRemark('');
+    setSelectedSerial('');
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-blue-900 text-white p-4">
-        <h1 className="text-3xl font-bold text-center">Device Rental System</h1>
-      </header>
-      <div className="container mx-auto p-4 max-w-4xl">
-        {user && (
-          <div className="mb-6 flex flex-wrap gap-2 justify-center">
-              {user.isAdmin && (
-              <>
-                <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">관리자 페이지</button>
-                
-                <button onClick={() => navigate('/devices/manage')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">디바이스 관리</button>
-              </>
-            )}
+    <div className="min-h-screen bg-paper">
+      <div className="page-wrap">
+        <h1 className="page-title">대여 현황</h1>
+        <p className="page-sub">현재 대여 중인 디바이스 목록입니다</p>
+
+        <div className="flex gap-2 mt-5 mb-4 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[220px]">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-hint pointer-events-none">
+              <SearchIcon size={14} />
+            </span>
+            <input
+              type="text"
+              value={searchSerial}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="시리얼 번호 검색"
+              className="input w-full pl-9"
+            />
           </div>
-        )}
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4 text-center">현재 대여 현황</h2>
-        <div className="mb-6 flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-md justify-center">
-          <input
-            type="text"
-            value={searchSerial}
-            onChange={(e) => setSearchSerial(e.target.value)}
-            placeholder="시리얼 번호 검색"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-            검색
-          </button>
-          <button onClick={handleReset} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-            초기화
-          </button>
+          <button onClick={() => handleSearch('')} className="btn btn-outline">초기화</button>
         </div>
-        {error && <p className="text-red-500 text-center">{error}</p>}
-        {!error && filteredDevices.length === 0 && <p className="text-gray-600 text-center">대여 중인 디바이스가 없습니다.</p>}
+
+        {error && <div className="alert alert-error">{error}</div>}
+        {!error && filteredDevices.length === 0 && (
+          <div className="card p-10 text-center text-sub text-sm">대여 중인 디바이스가 없습니다.</div>
+        )}
         {!error && filteredDevices.length > 0 && (
-          <div className="overflow-x-auto mx-auto max-w-[1024px]">
-            <table className="min-w-[1024px] border-collapse bg-white shadow-md rounded-lg">
+          <div className="card overflow-x-auto">
+            <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 680 }}>
               <thead>
-                <tr className="bg-blue-50">
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">시리얼 번호</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">모델명</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 이름</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 버전</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여자</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">대여일시</th>
-                  <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">특이사항</th>
+                <tr>
+                  <th style={{ width: 96 }}>시리얼</th>
+                  <th style={{ width: 190 }}>디바이스 / OS</th>
+                  <th style={{ width: 130 }}>대여자</th>
+                  <th style={{ width: 110 }}>대여일시</th>
+                  <th>특이사항</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredDevices.map(device => (
-                  <tr key={device.serialNumber} className="hover:bg-gray-50">
-                    <td className="border border-gray-200 p-2">{device.serialNumber || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2">{device.modelName || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2">{device.osName || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2">{device.osVersion || 'N/A'}</td>
-                    <td className="border border-gray-200 p-2">
-                      {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation || 'N/A'})` : '없음'}
-                    </td>
-                    <td className="border border-gray-200 p-2">
-                      {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
-                    </td>
-                    <td className="border border-gray-200 p-2">
-                      {device.remark ? (
-                        <button
-                          onClick={() => openRemarkModal(device.remark)}
-                          className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                        >
-                          보기
-                        </button>
-                      ) : '없음'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredDevices.map(device => {
+                  const rented = formatRentedAt(device.rentedAt);
+                  return (
+                    <tr key={device.serialNumber}>
+                      <td className="td-mono">{device.serialNumber || 'N/A'}</td>
+                      <td>
+                        <div className="cell-main truncate" title={device.modelName || 'N/A'}>
+                          {device.modelName || 'N/A'}
+                        </div>
+                        <div className="cell-sub">{formatOs(device.osName, device.osVersion)}</div>
+                      </td>
+                      <td>
+                        {device.rentedBy ? (
+                          <>
+                            <div className="cell-main">{device.rentedBy.name}</div>
+                            <div className="cell-sub">{device.rentedBy.affiliation || 'N/A'}</div>
+                          </>
+                        ) : (
+                          <span className="td-hint">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {rented ? (
+                          <>
+                            <div className="td-sub">{rented.date.slice(5)}</div>
+                            <div className="cell-sub">{rented.time}</div>
+                          </>
+                        ) : (
+                          <span className="td-hint">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {device.remark ? (
+                          <button
+                            type="button"
+                            className="remark-preview w-full"
+                            title="클릭하여 전체 보기"
+                            onClick={() => openRemarkModal(device)}
+                          >
+                            {device.remark}
+                          </button>
+                        ) : (
+                          <span className="td-hint">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
+
         {showRemarkModal && (
-  <div style={{
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-    justifyContent: 'center', alignItems: 'center'
-  }}>
-    <div style={{
-      backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-    }}>
-      <h3>특이사항</h3>
-      <p style={{ margin: '20px 0', whiteSpace: 'pre-wrap' }}>{selectedRemark}</p>
-      <button
-        onClick={closeRemarkModal}
-        style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-      >
-        닫기
-      </button>
-    </div>
-  </div>
-)}
+          <div className="modal-overlay" onClick={closeRemarkModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <div className="modal-title">특이사항</div>
+                  <div className="text-xs text-sub mt-0.5"><span className="td-mono">{selectedSerial}</span></div>
+                </div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeRemarkModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body">
+                <div className="modal-note">{selectedRemark}</div>
+              </div>
+              <div className="modal-foot">
+                <button onClick={closeRemarkModal} className="btn btn-outline">닫기</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

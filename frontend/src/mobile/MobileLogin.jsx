@@ -2,32 +2,35 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../utils/AuthContext';
+import { DeviceIcon } from '../components/Icons';
 
 const MobileLogin = () => {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login, user } = useAuth();
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const { setUser, user } = useAuth();
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
-  // API URL 확인
-  if (!apiUrl) {
-    throw new Error('REACT_APP_API_URL 환경 변수가 설정되지 않았습니다.');
-  }
-
-  // 로그인 상태 → /mobile/rent로 리다이렉트
   useEffect(() => {
     if (user) {
       navigate('/mobile/rent');
     }
   }, [user, navigate]);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
     try {
-      const response = await axios.post(`${apiUrl}/api/auth/login`, { id, password });
-      const { token } = response.data;
-      login(token);
+      const response = await axios.post(`${apiUrl}/api/auth/login`, { id: id.trim(), password });
+      localStorage.setItem('token', response.data.token);
+
+      const meResponse = await axios.get(`${apiUrl}/api/me`, {
+        headers: { Authorization: `Bearer ${response.data.token}` },
+      });
+      const userData = meResponse.data.user;
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
       navigate('/mobile/rent');
     } catch (err) {
       setError('로그인에 실패했습니다. 아이디와 비밀번호를 확인해 주세요.');
@@ -35,29 +38,43 @@ const MobileLogin = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-2xl mb-4">로그인</h1>
-      {error && <p className="text-red-600 mb-2">{error}</p>}
-      <input
-        type="text"
-        value={id}
-        onChange={(e) => setId(e.target.value)}
-        placeholder="아이디"
-        className="p-2 mb-2 border rounded w-3/4"
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="비밀번호"
-        className="p-2 mb-2 border rounded w-3/4"
-      />
-      <button
-        onClick={handleLogin}
-        className="p-2 bg-blue-600 text-white rounded w-3/4"
-      >
-        로그인
-      </button>
+    <div className="min-h-screen bg-paper flex items-center justify-center px-5">
+      <div className="w-full max-w-[340px]">
+        <div className="flex items-center justify-center gap-2 mb-6 text-ink">
+          <DeviceIcon size={22} />
+          <span className="text-xl font-bold tracking-tight">DeviceRent</span>
+        </div>
+        <div className="card" style={{ borderTop: '2px solid var(--ink)' }}>
+          <div className="p-5">
+            <h1 className="text-lg font-bold text-ink mb-1">모바일 로그인</h1>
+            <p className="text-xs text-sub mb-5">QR 스캔으로 빠르게 대여/반납하세요</p>
+            {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleLogin}>
+              <label className="field-label" htmlFor="m-login-id">아이디</label>
+              <input
+                id="m-login-id"
+                type="text"
+                value={id}
+                onChange={(e) => setId(e.target.value)}
+                placeholder="아이디 입력"
+                required
+                className="input w-full mb-3"
+              />
+              <label className="field-label" htmlFor="m-login-pw">비밀번호</label>
+              <input
+                id="m-login-pw"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 입력"
+                required
+                className="input w-full mb-5"
+              />
+              <button type="submit" className="btn btn-ink w-full">로그인</button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

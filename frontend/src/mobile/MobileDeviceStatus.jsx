@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import BarcodeScanner from './BarcodeScanner';
+import { ScanIcon } from '../components/Icons';
 
 const MobileDeviceStatus = () => {
   const location = useLocation();
@@ -9,12 +10,7 @@ const MobileDeviceStatus = () => {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const token = localStorage.getItem('token');
-  const apiUrl = import.meta.env.VITE_API_URL;
-
-  // API URL 확인
-  if (!apiUrl) {
-    throw new Error('REACT_APP_API_URL 환경 변수가 설정되지 않았습니다.');
-  }
+  const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -63,28 +59,50 @@ const MobileDeviceStatus = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-2xl mb-4">디바이스 대여/반납</h1>
-      {error && <p className="text-red-600 mb-2">{error}</p>}
-      {scanning ? (
-        <BarcodeScanner onScan={handleScan} />
-      ) : (
-        <>
-          {device ? (
-            <div className="text-center">
-              <p>시리얼 번호: {device.serialNumber}</p>
-              <p>상태: {device.status === 'rented' ? '대여중' : device.status}</p>
+    <div className="min-h-screen bg-paper px-5 py-8">
+      <div className="max-w-[400px] mx-auto">
+        <h1 className="page-title" style={{ fontSize: 20 }}>대여 / 반납</h1>
+        <p className="page-sub mb-5">디바이스의 QR 코드 또는 바코드를 스캔하세요</p>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        {scanning ? (
+          <div className="card overflow-hidden">
+            <BarcodeScanner onScan={handleScan} onError={(msg) => { setError(msg); setScanning(false); }} />
+            <div className="p-3">
+              <button onClick={() => setScanning(false)} className="btn btn-outline w-full">스캔 취소</button>
             </div>
-          ) : (
-            <button
-              onClick={() => setScanning(true)}
-              className="p-2 bg-blue-600 text-white rounded w-3/4"
-            >
-              QR/바코드 스캔
-            </button>
-          )}
-        </>
-      )}
+          </div>
+        ) : (
+          <>
+            {device ? (
+              <div className="card" style={{ borderTop: '2px solid var(--ink)' }}>
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="td-mono" style={{ fontSize: 14 }}>{device.serialNumber}</span>
+                    <span className={`badge ${device.status === 'rented' ? 'badge-warn' : 'badge-ok'}`}>
+                      {device.status === 'rented' ? '대여중' : device.status}
+                    </span>
+                  </div>
+                  {device.modelName && (
+                    <div className="text-sm font-bold text-ink">{device.modelName}</div>
+                  )}
+                  <button onClick={() => setDevice(null)} className="btn btn-outline w-full mt-4">닫기</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setScanning(true)}
+                className="btn btn-ink w-full"
+                style={{ padding: '14px 16px', fontSize: 14 }}
+              >
+                <ScanIcon size={18} />
+                QR / 바코드 스캔
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

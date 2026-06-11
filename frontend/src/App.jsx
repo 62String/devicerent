@@ -41,7 +41,7 @@ class ErrorBoundary extends Component {
             <br />
             {this.state.errorInfo && this.state.errorInfo.componentStack}
           </details>
-          <a href={this.state.isMobile ? "/mobile/login" : "/login"}>홈으로 돌아가기</a>
+          <a href={this.props.isMobile ? "/mobile/login" : "/login"}>홈으로 돌아가기</a>
         </div>
       );
     }
@@ -124,10 +124,6 @@ function AppContent() {
     const userAgent = window.navigator.userAgent;
     const mobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Windows Phone/i.test(userAgent);
     const viewportWidth = window.innerWidth <= 768; // 768px 이하 → 모바일
-    console.log('User-Agent:', userAgent);
-    console.log('isMobile (User-Agent):', mobileDevice);
-    console.log('Viewport Width:', window.innerWidth);
-    console.log('isMobile (Viewport):', viewportWidth);
     setIsMobile(mobileDevice || viewportWidth);
 
     const handleResize = () => {

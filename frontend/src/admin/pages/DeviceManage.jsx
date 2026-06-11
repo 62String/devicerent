@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
+import { SearchIcon, XIcon, DownloadIcon, RefreshIcon, ClockIcon } from '../../components/Icons';
+
+const STATUS_BADGE = {
+  active: { label: '활성', className: 'badge badge-ok' },
+  repair: { label: '수리중', className: 'badge badge-warn' },
+  inactive: { label: '비활성', className: 'badge badge-neutral' },
+};
+
+const formatOs = (osName, osVersion) => {
+  if (!osName && !osVersion) return 'N/A';
+  if (!osVersion) return osName;
+  if (!osName || osVersion.toLowerCase().startsWith(osName.toLowerCase())) return osVersion;
+  return `${osName} ${osVersion}`;
+};
 
 const DeviceManage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
   const [newDevice, setNewDevice] = useState({ serialNumber: '', deviceInfo: '', osName: '', osVersion: '', modelName: '' });
   const [message, setMessage] = useState('');
@@ -29,7 +41,6 @@ const DeviceManage = () => {
   const [showStatusHistory, setShowStatusHistory] = useState(false);
   const [statusHistory, setStatusHistory] = useState([]);
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
-  // const [selectedFile, setSelectedFile] = useState(null); // 엑셀 임포트 관련 상태 주석 처리
   const devicesPerPage = 50;
   const historyPerPage = 50;
   const token = localStorage.getItem('token');
@@ -39,26 +50,21 @@ const DeviceManage = () => {
     fetchDevices();
   }, []);
 
- const fetchDevices = async () => {
-  try {
-    console.log('Fetching devices from:', `${apiUrl}/api/devices`);
-    const response = await axios.get(`${apiUrl}/api/devices`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    console.log('DeviceManage fetchDevices response:', response.data);
-    if (!Array.isArray(response.data)) {
-      console.error('Response data is not an array:', response.data);
-      setError('디바이스 데이터 형식이 올바르지 않습니다.');
-      return;
+  const fetchDevices = async () => {
+    try {
+      const response = await axios.get(`${apiUrl}/api/devices`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!Array.isArray(response.data)) {
+        setError('디바이스 데이터 형식이 올바르지 않습니다.');
+        return;
+      }
+      setDevices(response.data);
+      setError(null);
+    } catch (err) {
+      setError('디바이스 목록을 불러오지 못했습니다. 서버를 확인해 주세요.');
     }
-    setDevices(response.data);
-    console.log('Devices state updated:', response.data);
-    setError(null);
-  } catch (err) {
-    setError('디바이스 목록을 불러오지 못했습니다. 서버를 확인해 주세요.');
-    console.error('Error fetching devices:', err);
-  }
-};
+  };
 
   const fetchStatusHistory = async () => {
     try {
@@ -66,11 +72,9 @@ const DeviceManage = () => {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
-      console.log('All device status history response:', response.data);
       setStatusHistory(response.data);
       setShowStatusHistory(true);
     } catch (err) {
-      console.error('Error fetching all device status history:', err);
       setMessage('상태 변경 이력 조회 실패');
       setTimeout(() => setMessage(''), 3000);
     }
@@ -106,7 +110,20 @@ const DeviceManage = () => {
   const indexOfLastDevice = currentPage * devicesPerPage;
   const indexOfFirstDevice = indexOfLastDevice - devicesPerPage;
   const currentDevices = sortedDevices.slice(indexOfFirstDevice, indexOfLastDevice);
-  const totalPages = Math.ceil(filteredDevices.length / devicesPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredDevices.length / devicesPerPage));
+  const historyTotalPages = Math.max(1, Math.ceil(filteredStatusHistory.length / historyPerPage));
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const sortIndicator = (field) =>
+    sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -127,7 +144,6 @@ const DeviceManage = () => {
     } catch (err) {
       setMessage(err.response?.data?.message || '등록 실패');
       setTimeout(() => setMessage(''), 3000);
-      console.error('Error registering device:', err);
     }
   };
 
@@ -153,7 +169,6 @@ const DeviceManage = () => {
     } catch (err) {
       setMessage('삭제 실패');
       setTimeout(() => setMessage(''), 3000);
-      console.error('Error deleting device:', err);
     } finally {
       closeDeleteModal();
     }
@@ -189,7 +204,6 @@ const DeviceManage = () => {
     } catch (err) {
       setMessage('상태 업데이트 실패');
       setTimeout(() => setMessage(''), 3000);
-      console.error('Error updating device status:', err);
     } finally {
       closeStatusModal();
     }
@@ -197,7 +211,7 @@ const DeviceManage = () => {
 
   const handleInitDevices = async () => {
     try {
-      const response = await axios.post(
+      await axios.post(
         `${apiUrl}/api/admin/init-devices`,
         { force: forceInit, exportPath: latestExportPath },
         {
@@ -211,7 +225,6 @@ const DeviceManage = () => {
     } catch (error) {
       setMessage(error.response?.data?.message || '디바이스 초기화 실패');
       setTimeout(() => setMessage(''), 3000);
-      console.error('Device initialization error:', error);
     }
   };
 
@@ -275,20 +288,12 @@ const DeviceManage = () => {
       setLatestExportPath(fileName);
       setMessage('엑셀 파일이 준비되었습니다. 다운로드 버튼을 눌러 저장해 주세요.');
       setTimeout(() => setMessage(''), 3000);
-
-      if (response.status === 200) {
-        console.log('Export successful, file download triggered');
-      } else {
-        console.warn('Server returned non-200 status:', response.status);
-      }
     } catch (error) {
       if (error.response && error.response.status === 200) {
         setMessage('엑셀 파일이 준비되었습니다. 다운로드 버튼을 눌러 저장해 주세요.');
-        console.log('File prepared despite server error:', error);
       } else {
         setMessage('엑셀 익스포트 실패');
         setTimeout(() => setMessage(''), 3000);
-        console.error('Export error:', error);
       }
     }
   };
@@ -308,478 +313,389 @@ const DeviceManage = () => {
     }, 100);
   };
 
-  /*
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setSelectedFile(file);
-    if (file) {
-      setMessage(`선택된 파일: ${file.name}`);
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setMessage('업로드할 파일을 선택해 주세요.');
-      setTimeout(() => setMessage(''), 3000);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('excelFile', selectedFile);
-
-    try {
-      const response = await axios.post(`${apiUrl}/api/admin/upload-devices`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`
-        },
-        withCredentials: true
-      });
-      setMessage('디바이스 초기화 성공!');
-      setTimeout(() => setMessage(''), 3000);
-      setSelectedFile(null);
-      fetchDevices();
-    } catch (err) {
-      setMessage(err.response?.data?.message || '파일 업로드 및 초기화 실패');
-      setTimeout(() => setMessage(''), 3000);
-      console.error('Error uploading file:', err);
-    }
-  };
-  */
+  const pageButtons = (page, total, setPage) => (
+    <div className="flex justify-center gap-1.5 mt-4">
+      <button className="pg-btn" onClick={() => setPage(prev => Math.max(prev - 1, 1))} disabled={page === 1}>‹</button>
+      {Array.from({ length: total }, (_, i) => (
+        <button
+          key={i + 1}
+          className={`pg-btn ${page === i + 1 ? 'pg-btn-active' : ''}`}
+          onClick={() => setPage(i + 1)}
+        >
+          {i + 1}
+        </button>
+      ))}
+      <button className="pg-btn" onClick={() => setPage(prev => Math.min(prev + 1, total))} disabled={page === total}>›</button>
+    </div>
+  );
 
   if (!user || !user.isAdmin) {
-    return <div className="min-h-screen bg-gray-100 flex items-center justify-center">관리자 권한이 없습니다.</div>;
+    return (
+      <div className="min-h-screen bg-paper flex items-center justify-center text-sub text-sm">
+        관리자 권한이 없습니다.
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-blue-900 text-white p-4">
-        <h1 className="text-3xl font-bold text-center">Device Rental System</h1>
-      </header>
-      <div className="container mx-auto p-4 max-w-4xl">
-        {user && (
-          <div className="mb-6 flex flex-wrap gap-2 justify-center">
-            {user.isAdmin && (
-              <>
-                <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">관리자 페이지</button>
-                <button onClick={() => navigate('/devices/manage')} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2">디바이스 관리</button>
-              </>
-            )}
+    <div className="min-h-screen bg-paper">
+      <div className="page-wrap" style={{ maxWidth: 1200 }}>
+        <div className="flex items-end justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="page-title">디바이스 관리</h1>
+            <p className="page-sub">디바이스 등록, 상태 변경, 엑셀 초기화/익스포트를 관리합니다</p>
           </div>
-        )}
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4 text-center">디바이스 관리</h2>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => openInitModal(false)} className="btn btn-outline">
+              <RefreshIcon size={14} />
+              엑셀 초기화
+            </button>
+            <button onClick={() => openInitModal(true)} className="btn" style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>
+              엑셀 강제 초기화
+            </button>
+            <button onClick={exportToExcel} className="btn btn-ink">
+              <DownloadIcon size={14} />
+              엑셀 익스포트
+            </button>
+            <button onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory} className="btn btn-outline">
+              <ClockIcon size={14} />
+              {showStatusHistory ? '기기 목록 보기' : '상태 변경 이력'}
+            </button>
+          </div>
+        </div>
+
         {message && (
-          <div className={`text-center mb-4 p-2 rounded ${message.includes('실패') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-            {message.includes('성공') && '✅'} {message.includes('실패') && '❌'} {message}
-          </div>
+          <div className={`alert mt-5 ${message.includes('실패') ? 'alert-error' : 'alert-success'}`}>{message}</div>
         )}
-        {error && <p className="text-red-500 text-center mb-4 bg-red-100 p-2 rounded">❌ {error}</p>}
-        <div className="mb-6 flex flex-wrap gap-2 justify-center">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-              setHistoryCurrentPage(1);
-            }}
-            placeholder="검색..."
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={() => openInitModal(false)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            엑셀 초기화 (업데이트)
-          </button>
-          <button
-            onClick={() => openInitModal(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-          >
-            엑셀 강제 초기화
-          </button>
-          <button
-            onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-          >
-            엑셀 익스포트
-          </button>
-          {/*
-          <div className="flex items-center gap-2">
+        {error && <div className="alert alert-error mt-5">{error}</div>}
+
+        <form onSubmit={handleRegister} className="card mt-5 mb-4" style={{ borderTop: '2px solid var(--ink)' }}>
+          <div className="p-4">
+            <div className="text-sm font-bold text-ink mb-3">신규 디바이스 등록</div>
+            <div className="flex gap-2 flex-wrap items-end">
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label">시리얼 번호 *</label>
+                <input
+                  type="text"
+                  value={newDevice.serialNumber}
+                  onChange={(e) => setNewDevice({ ...newDevice, serialNumber: e.target.value })}
+                  placeholder="SN000"
+                  required
+                  className="input w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label">디바이스 정보 *</label>
+                <input
+                  type="text"
+                  value={newDevice.deviceInfo}
+                  onChange={(e) => setNewDevice({ ...newDevice, deviceInfo: e.target.value })}
+                  placeholder="Galaxy S21"
+                  required
+                  className="input w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[110px]">
+                <label className="field-label">OS 이름 *</label>
+                <input
+                  type="text"
+                  value={newDevice.osName}
+                  onChange={(e) => setNewDevice({ ...newDevice, osName: e.target.value })}
+                  placeholder="Android"
+                  required
+                  className="input w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[100px]">
+                <label className="field-label">OS 버전</label>
+                <input
+                  type="text"
+                  value={newDevice.osVersion}
+                  onChange={(e) => setNewDevice({ ...newDevice, osVersion: e.target.value })}
+                  placeholder="14"
+                  className="input w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label">모델명</label>
+                <input
+                  type="text"
+                  value={newDevice.modelName}
+                  onChange={(e) => setNewDevice({ ...newDevice, modelName: e.target.value })}
+                  placeholder="SM-G991N"
+                  className="input w-full"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary">등록</button>
+            </div>
+          </div>
+        </form>
+
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1 max-w-[320px]">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-hint pointer-events-none">
+              <SearchIcon size={14} />
+            </span>
             <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleFileChange}
-              className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+                setHistoryCurrentPage(1);
+              }}
+              placeholder="시리얼, 모델명, OS 검색"
+              className="input w-full pl-9"
             />
           </div>
-          */}
-          <button
-            onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory}
-            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-          >
-            {showStatusHistory ? '기기 목록 보기' : '상태 변경 이력'}
-          </button>
         </div>
-        <form onSubmit={handleRegister} className="mb-6 flex flex-wrap gap-2 justify-center bg-gray-50 p-3 rounded-md">
-          <input
-            type="text"
-            value={newDevice.serialNumber}
-            onChange={(e) => setNewDevice({ ...newDevice, serialNumber: e.target.value })}
-            placeholder="시리얼 번호"
-            required
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            value={newDevice.deviceInfo}
-            onChange={(e) => setNewDevice({ ...newDevice, deviceInfo: e.target.value })}
-            placeholder="디바이스 정보"
-            required
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            value={newDevice.osName}
-            onChange={(e) => setNewDevice({ ...newDevice, osName: e.target.value })}
-            placeholder="OS 이름"
-            required
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            value={newDevice.osVersion}
-            onChange={(e) => setNewDevice({ ...newDevice, osVersion: e.target.value })}
-            placeholder="OS 버전"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            value={newDevice.modelName}
-            onChange={(e) => setNewDevice({ ...newDevice, modelName: e.target.value })}
-            placeholder="모델명"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            등록
-          </button>
-        </form>
+
         {!error && (
           showStatusHistory ? (
-            <div className="overflow-x-auto mx-auto max-w-[1024px]">
-              <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
-                <thead>
-                  <tr className="bg-blue-50">
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">시리얼 번호</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">모델명</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 이름</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">OS 버전</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">상태 변경 사유</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">변경자</th>
-                    <th className="border border-gray-200 p-2 text-left font-medium text-gray-700">변경 시간</th>
-                  </tr>
-                </thead>
-                <tbody>
-                {filteredStatusHistory.length > 0 ? (
-                  filteredStatusHistory
-                      .slice((historyCurrentPage - 1) * historyPerPage, historyCurrentPage * historyPerPage)
-                      .map((history, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.serialNumber}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.modelName || 'N/A'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.osName || 'N/A'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.osVersion || 'N/A'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.status || 'N/A'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.statusReason || '없음'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{history.performedBy || '알 수 없음'}</td>
-                          <td className="border border-gray-200 p-2 whitespace-normal">{new Date(history.timestamp).toLocaleString()}</td>
-                        </tr>
-                      ))
-                  ) : (
-                    <tr>
-                      <td colSpan="8" className="border border-gray-200 p-2 text-center text-gray-600">상태 변경 이력이 없습니다.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              <div className="mt-4 flex justify-center gap-2">
-                <button
-                  onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))}
-                  className={`px-3 py-1 rounded ${historyCurrentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                  disabled={historyCurrentPage === 1}
-                >
-                  이전
-                </button>
-                {Array.from({ length: Math.ceil(filteredStatusHistory.length / historyPerPage) }, (_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => setHistoryCurrentPage(i + 1)}
-                    className={`px-3 py-1 rounded ${historyCurrentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setHistoryCurrentPage(prev => Math.min(prev + 1, Math.ceil(statusHistory.length / historyPerPage)))}
-                  className={`px-3 py-1 rounded ${historyCurrentPage === Math.ceil(statusHistory.length / historyPerPage) ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                  disabled={historyCurrentPage === Math.ceil(statusHistory.length / historyPerPage)}
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          ) : (
-            devices.length > 0 ? (
-              <div className="overflow-x-auto mx-auto max-w-[1024px]">
-                <table className="min-w-full border-collapse bg-white shadow-md rounded-lg">
+            <>
+              <div className="card overflow-x-auto">
+                <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 820 }}>
                   <thead>
-                    <tr className="bg-blue-50">
-                      {['시리얼 번호', '모델명', 'OS 이름', 'OS 버전', '대여자', '대여일시', '상태', '상태 변경 사유', '액션'].map((header) => (
-                        <th
-                          key={header}
-                          className="border border-gray-200 p-2 text-left font-medium text-gray-700 cursor-pointer"
-                          onClick={() => {
-                            if (sortField === header) {
-                              setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setSortField(header);
-                              setSortOrder('asc');
-                            }
-                          }}
-                        >
-                          {header} {sortField === header && (sortOrder === 'asc' ? '↑' : '↓')}
-                        </th>
-                      ))}
+                    <tr>
+                      <th style={{ width: 92 }}>시리얼</th>
+                      <th style={{ width: 170 }}>디바이스 / OS</th>
+                      <th style={{ width: 76 }}>상태</th>
+                      <th>상태 변경 사유</th>
+                      <th style={{ width: 96 }}>변경자</th>
+                      <th style={{ width: 150 }}>변경 시간</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {currentDevices.map(device => (
-                      <tr key={device.serialNumber} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.serialNumber}</td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.modelName || 'N/A'}</td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.osName || 'N/A'}</td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.osVersion || 'N/A'}</td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">
-                          {device.rentedBy ? `${device.rentedBy.name} (${device.rentedBy.affiliation || 'N/A'})` : '없음'}
-                        </td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">
-                          {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : '없음'}
-                        </td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.status || 'N/A'}</td>
-                        <td className="border border-gray-200 p-2 whitespace-normal">{device.statusReason || '없음'}</td>
-                        <td className="border border-gray-200 p-2">
-                          <button
-                            onClick={() => openDeleteModal(device.serialNumber)}
-                            className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 mr-1 text-sm"
-                          >
-                            삭제
-                          </button>
-                          <button
-                            onClick={() => openStatusModal(device)}
-                            className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                          >
-                            상태 변경
-                          </button>
-                        </td>
+                    {filteredStatusHistory.length > 0 ? (
+                      filteredStatusHistory
+                        .slice((historyCurrentPage - 1) * historyPerPage, historyCurrentPage * historyPerPage)
+                        .map((history, index) => {
+                          const badge = STATUS_BADGE[history.status];
+                          return (
+                            <tr key={index}>
+                              <td className="td-mono">{history.serialNumber}</td>
+                              <td>
+                                <div className="cell-main truncate" title={history.modelName || 'N/A'}>{history.modelName || 'N/A'}</div>
+                                <div className="cell-sub">{formatOs(history.osName, history.osVersion)}</div>
+                              </td>
+                              <td>
+                                {badge
+                                  ? <span className={badge.className}>{badge.label}</span>
+                                  : <span className="td-hint">{history.status || '—'}</span>}
+                              </td>
+                              <td className="td-sub">
+                                <div className="truncate" title={history.statusReason || ''}>
+                                  {history.statusReason || <span className="td-hint">—</span>}
+                                </div>
+                              </td>
+                              <td className="td-sub">{history.performedBy || '알 수 없음'}</td>
+                              <td className="td-sub text-xs">{new Date(history.timestamp).toLocaleString()}</td>
+                            </tr>
+                          );
+                        })
+                    ) : (
+                      <tr>
+                        <td colSpan="6" className="text-center text-sub py-8">상태 변경 이력이 없습니다.</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
-                <div className="mt-4 flex justify-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                    disabled={currentPage === 1}
-                  >
-                    이전
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i + 1}
-                      onClick={() => setCurrentPage(i + 1)}
-                      className={`px-3 py-1 rounded  ${currentPage === i + 1 ? '' : 'bg-gray-200 hover:bg-gray-300 hover:shadow-sm'}`}
-                      style={currentPage === i + 1 ? { backgroundColor: '#d1d5db', color: 'black', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', fontWeight: 'bold' } : {}}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    className={`px-3 py-1 rounded ${currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
-                    disabled={currentPage === totalPages}
-                  >
-                    다음
-                  </button>
-                </div>
               </div>
+              {historyTotalPages > 1 && pageButtons(historyCurrentPage, historyTotalPages, setHistoryCurrentPage)}
+            </>
+          ) : (
+            devices.length > 0 ? (
+              <>
+                <div className="card overflow-x-auto">
+                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 900 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 92 }} className="cursor-pointer select-none" onClick={() => handleSort('serialNumber')}>
+                          시리얼{sortIndicator('serialNumber')}
+                        </th>
+                        <th style={{ width: 170 }} className="cursor-pointer select-none" onClick={() => handleSort('modelName')}>
+                          디바이스 / OS{sortIndicator('modelName')}
+                        </th>
+                        <th style={{ width: 110 }}>대여자</th>
+                        <th style={{ width: 100 }}>대여일시</th>
+                        <th style={{ width: 76 }}>상태</th>
+                        <th>상태 변경 사유</th>
+                        <th style={{ width: 150 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentDevices.map(device => {
+                        const badge = STATUS_BADGE[device.status];
+                        return (
+                          <tr key={device.serialNumber}>
+                            <td className="td-mono">{device.serialNumber}</td>
+                            <td>
+                              <div className="cell-main truncate" title={device.modelName || 'N/A'}>{device.modelName || 'N/A'}</div>
+                              <div className="cell-sub">{formatOs(device.osName, device.osVersion)}</div>
+                            </td>
+                            <td>
+                              {device.rentedBy ? (
+                                <>
+                                  <div className="cell-main">{device.rentedBy.name}</div>
+                                  <div className="cell-sub">{device.rentedBy.affiliation || 'N/A'}</div>
+                                </>
+                              ) : (
+                                <span className="td-hint">—</span>
+                              )}
+                            </td>
+                            <td className="td-sub text-xs">
+                              {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : <span className="td-hint">—</span>}
+                            </td>
+                            <td>
+                              {badge
+                                ? <span className={badge.className}>{badge.label}</span>
+                                : <span className="td-hint">{device.status || '—'}</span>}
+                            </td>
+                            <td className="td-sub">
+                              <div className="truncate" title={device.statusReason || ''}>
+                                {device.statusReason || <span className="td-hint">—</span>}
+                              </div>
+                            </td>
+                            <td className="text-right">
+                              <div className="flex gap-1.5 justify-end">
+                                <button onClick={() => openStatusModal(device)} className="btn btn-outline btn-sm">상태 변경</button>
+                                <button
+                                  onClick={() => openDeleteModal(device.serialNumber)}
+                                  className="btn btn-sm"
+                                  style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)' }}
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages > 1 && pageButtons(currentPage, totalPages, setCurrentPage)}
+              </>
             ) : (
-              <p className="text-gray-600 text-center">디바이스 목록이 없습니다.</p>
+              <div className="card p-10 text-center text-sub text-sm">디바이스 목록이 없습니다.</div>
             )
           )
         )}
+
         {showDeleteModal && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-            justifyContent: 'center', alignItems: 'center'
-          }}>
-            <div style={{
-              backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-            }}>
-              <h3>삭제하시겠습니까?</h3>
-              <div>
-                <button
-                  onClick={handleDelete}
-                  style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  예
-                </button>
-                <button
-                  onClick={closeDeleteModal}
-                  style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  아니오
-                </button>
+          <div className="modal-overlay" onClick={closeDeleteModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <div className="modal-title">디바이스 삭제</div>
+                  <div className="text-xs text-sub mt-0.5">
+                    <span className="td-mono">{selectedDevice?.serialNumber}</span> 디바이스를 삭제하시겠습니까?
+                  </div>
+                </div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeDeleteModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-foot pt-4">
+                <button onClick={closeDeleteModal} className="btn btn-outline">취소</button>
+                <button onClick={handleDelete} className="btn btn-danger">삭제</button>
               </div>
             </div>
           </div>
         )}
+
         {showStatusModal && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-            justifyContent: 'center', alignItems: 'center'
-          }}>
-            <div style={{
-              backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-            }}>
-              <h3>상태 변경</h3>
-              <div style={{ margin: '20px 0' }}>
-                <label style={{ marginRight: '10px' }}>상태: </label>
+          <div className="modal-overlay" onClick={closeStatusModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <div className="modal-title">상태 변경</div>
+                  <div className="text-xs text-sub mt-0.5"><span className="td-mono">{selectedDevice?.serialNumber}</span></div>
+                </div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeStatusModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body">
+                <label className="field-label">상태</label>
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  style={{ padding: '5px', width: '200px' }}
+                  className="input w-full mb-3"
                 >
                   <option value="active">활성화</option>
                   <option value="repair">수리중</option>
                   <option value="inactive">비활성화</option>
                 </select>
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>사유: </label>
+                <label className="field-label">사유</label>
                 <textarea
                   value={statusReason}
                   onChange={(e) => setStatusReason(e.target.value)}
                   placeholder="상태 변경 사유를 입력하세요"
-                  style={{ width: '100%', height: '80px', padding: '5px', resize: 'none' }}
+                  className="input w-full resize-none"
+                  rows={3}
                 />
               </div>
-              <div>
-                <button
-                  onClick={handleUpdateStatus}
-                  style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  확인
-                </button>
-                <button
-                  onClick={closeStatusModal}
-                  style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  취소
-                </button>
+              <div className="modal-foot">
+                <button onClick={closeStatusModal} className="btn btn-outline">취소</button>
+                <button onClick={handleUpdateStatus} className="btn btn-primary">변경</button>
               </div>
             </div>
           </div>
         )}
+
         {showInitModal && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-            justifyContent: 'center', alignItems: 'center'
-          }}>
-            <div style={{
-              backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-            }}>
-              <h3>정말 초기화 하시겠습니까?</h3>
-              <div>
-                <button
-                  onClick={confirmInit}
-                  style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  예
-                </button>
-                <button
-                  onClick={closeInitModal}
-                  style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  아니오
-                </button>
+          <div className="modal-overlay" onClick={closeInitModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div className="modal-title">{forceInit ? '엑셀 강제 초기화' : '엑셀 초기화'}</div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeInitModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body text-sub">
+                {forceInit
+                  ? '기존 디바이스 데이터를 모두 삭제하고 엑셀 기준으로 다시 등록합니다. 정말 진행하시겠습니까?'
+                  : '엑셀 파일 기준으로 디바이스 목록을 업데이트합니다. 진행하시겠습니까?'}
+              </div>
+              <div className="modal-foot">
+                <button onClick={closeInitModal} className="btn btn-outline">취소</button>
+                <button onClick={confirmInit} className={`btn ${forceInit ? 'btn-danger' : 'btn-primary'}`}>진행</button>
               </div>
             </div>
           </div>
         )}
+
         {showExportConfirmModal && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-            justifyContent: 'center', alignItems: 'center'
-          }}>
-            <div style={{
-              backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-            }}>
-              <h3>새로 수기로 등록한 디바이스의 정보가 누락 될 수 있습니다. 현재 디바이스 목록을 익스포트 하셨나요?</h3>
-              <div>
-                <button
-                  onClick={confirmExportAndInit}
-                  style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  예
-                </button>
-                <button
-                  onClick={closeExportConfirmModal}
-                  style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  아니오
-                </button>
+          <div className="modal-overlay" onClick={closeExportConfirmModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div className="modal-title">익스포트 확인</div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeExportConfirmModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body text-sub">
+                수기로 등록한 디바이스 정보가 누락될 수 있습니다. 현재 디바이스 목록을 익스포트 하셨나요?
+              </div>
+              <div className="modal-foot">
+                <button onClick={closeExportConfirmModal} className="btn btn-outline">아니오 — 돌아가기</button>
+                <button onClick={confirmExportAndInit} className="btn btn-primary">예 — 초기화 진행</button>
               </div>
             </div>
           </div>
         )}
+
         {showDownloadModal && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
-            justifyContent: 'center', alignItems: 'center'
-          }}>
-            <div style={{
-              backgroundColor: 'white', padding: '20px', borderRadius: '5px',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)', width: '400px', textAlign: 'center'
-            }}>
-              <h3>파일 다운로드</h3>
-              <p className="mb-4">파일이 준비되었습니다. 아래 버튼을 눌러 저장해 주세요.</p>
-              <p className="mb-4 text-gray-600">파일은 브라우저 기본 다운로드 폴더에 저장됩니다.</p>
-              <div>
-                <button
-                  onClick={handleDownload}
-                  style={{ marginRight: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
+          <div className="modal-overlay" onClick={closeDownloadModal}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div className="modal-title">파일 다운로드</div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeDownloadModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body">
+                <div className="modal-note">
+                  <span className="td-mono" style={{ fontSize: 12 }}>{downloadFileName}</span>
+                </div>
+                <p className="text-xs text-sub mt-2 mb-0">파일은 브라우저 기본 다운로드 폴더에 저장됩니다.</p>
+              </div>
+              <div className="modal-foot">
+                <button onClick={closeDownloadModal} className="btn btn-outline">취소</button>
+                <button onClick={handleDownload} className="btn btn-primary">
+                  <DownloadIcon size={14} />
                   다운로드
-                </button>
-                <button
-                  onClick={closeDownloadModal}
-                  style={{ padding: '10px 20px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                >
-                  취소
                 </button>
               </div>
             </div>

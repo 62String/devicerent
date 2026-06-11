@@ -1,87 +1,98 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from './utils/AuthContext'; // 경로 조정
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from './utils/AuthContext';
+import { getTheme, toggleTheme } from './utils/theme';
+import { DeviceIcon, MoonIcon, SunIcon } from './components/Icons';
 
 function Login() {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [theme, setTheme] = useState(getTheme());
   const navigate = useNavigate();
-  const { setUser } = useAuth(); // useAuth에서 setUser 가져오기
+  const { setUser } = useAuth();
   const apiUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:4000`;
 
   useEffect(() => {
     if (error) {
-      const timer = setTimeout(() => {
-        setError(''); // 2초 후 에러 메시지 초기화
-      }, 2000);
-      return () => clearTimeout(timer); // 컴포넌트 언마운트 시 타이머 정리
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
     }
   }, [error]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    console.log('apiUrl:', apiUrl);
-    console.log('Sending login request to:', `${apiUrl}/api/auth/login`);
-    console.log('Sending login request:', { id, password });
     try {
       const response = await axios.post(`${apiUrl}/api/auth/login`, { id: id.trim(), password });
-      console.log('Login response:', response.data);
       localStorage.setItem('token', response.data.token);
-      console.log('Token saved:', response.data.token);
 
-      // /me 호출로 사용자 정보 가져오기
       const meResponse = await axios.get(`${apiUrl}/api/me`, {
         headers: { Authorization: `Bearer ${response.data.token}` },
       });
-      console.log('User info from /me:', meResponse.data);
       const userData = meResponse.data.user;
-      localStorage.setItem('user', JSON.stringify(userData)); // 사용자 정보 저장
-      setUser(userData); // AuthContext 상태 업데이트
-      console.log('Current token in localStorage:', localStorage.getItem('token'));
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
       navigate('/devices');
     } catch (error) {
-      console.log('Login error details:', error.response?.data || error.message);
-      console.log('Login error status:', error.response?.status); // 상태 코드 로그
       setError(error.response?.data?.message || '로그인에 실패했습니다.');
-      console.error('Login error:', error);
     }
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '0 auto', padding: '20px' }}>
-      <h2>로그인</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleLogin}>
-        <div>
-          <label>아이디:</label>
-          <input
-            type="text"
-            value={id}
-            onChange={(e) => setId(e.target.value.trim())}
-            placeholder="아이디"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
+    <div className="min-h-screen bg-paper flex flex-col">
+      <div className="flex justify-end p-4">
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="다크모드 전환"
+          onClick={() => setTheme(toggleTheme())}
+        >
+          {theme === 'dark' ? <SunIcon size={15} /> : <MoonIcon size={15} />}
+        </button>
+      </div>
+      <div className="flex-1 flex items-center justify-center px-4 pb-24">
+        <div className="w-full max-w-[380px]">
+          <div className="flex items-center justify-center gap-2 mb-6 text-ink">
+            <DeviceIcon size={22} />
+            <span className="text-xl font-bold tracking-tight">DeviceRent</span>
+          </div>
+          <div className="card" style={{ borderTop: '2px solid var(--ink)' }}>
+            <div className="p-6">
+              <h1 className="text-lg font-bold text-ink mb-1">로그인</h1>
+              <p className="text-xs text-sub mb-5">디바이스 대여 시스템에 오신 것을 환영합니다</p>
+              {error && <div className="alert alert-error">{error}</div>}
+              <form onSubmit={handleLogin}>
+                <label className="field-label" htmlFor="login-id">아이디</label>
+                <input
+                  id="login-id"
+                  type="text"
+                  value={id}
+                  onChange={(e) => setId(e.target.value.trim())}
+                  placeholder="아이디 입력"
+                  required
+                  className="input w-full mb-3"
+                />
+                <label className="field-label" htmlFor="login-pw">비밀번호</label>
+                <input
+                  id="login-pw"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="비밀번호 입력"
+                  required
+                  className="input w-full mb-5"
+                />
+                <button type="submit" className="btn btn-ink w-full">로그인</button>
+              </form>
+            </div>
+          </div>
+          <p className="text-center text-xs text-sub mt-4">
+            계정이 없나요? <Link to="/register" className="link">가입 신청</Link>
+          </p>
         </div>
-        <div>
-          <label>비밀번호:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="비밀번호"
-            required
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          />
-        </div>
-        <button type="submit" style={{ padding: '10px 20px' }}>로그인</button>
-      </form>
-      <p>
-        계정이 없나요? <a href="/register">등록하기</a>
-      </p>
+      </div>
     </div>
   );
 }

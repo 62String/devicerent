@@ -101,6 +101,7 @@ router.get('/me', async (req, res) => {
       id: user.id,
       name: user.name,
       affiliation: user.affiliation,
+      position: user.position,
       isPending: user.isPending || false,
       isAdmin: user.isAdmin || false
     };
