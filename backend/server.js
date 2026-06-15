@@ -13,6 +13,8 @@ const Device = require('./models/Device');
 const User = require('./models/User');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+const { parseDeviceWorkbook } = require('./utils/deviceExcel');
 
 const log = process.env.NODE_ENV === 'test' ? () => {} : console.log;
 
@@ -68,6 +70,71 @@ if (!fs.existsSync(EXPORT_DIR)) {
     console.error('Failed to create exports directory:', err);
   }
 }
+
+const excelUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, callback) => callback(null, EXPORT_DIR),
+    filename: (_req, file, callback) => {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      callback(null, `uploaded_${timestamp}${path.extname(file.originalname)}`);
+    }
+  }),
+  fileFilter: (_req, file, callback) => {
+    const isXlsx = path.extname(file.originalname).toLowerCase() === '.xlsx';
+    callback(isXlsx ? null : new Error('Only .xlsx files are allowed'), isXlsx);
+  }
+});
+
+const persistImportedDevices = async (importedDevices, force) => {
+  const serialNumbers = new Set();
+  const duplicates = [];
+  importedDevices.forEach((device, index) => {
+    if (serialNumbers.has(device.serialNumber)) duplicates.push({ index, serialNumber: device.serialNumber });
+    serialNumbers.add(device.serialNumber);
+  });
+  if (duplicates.length > 0) {
+    throw new Error(JSON.stringify({ message: 'Invalid devices found', invalidDevices: duplicates }));
+  }
+
+  if (force) {
+    await Device.deleteMany({});
+    return Device.insertMany(importedDevices.map((device) => ({
+      ...device,
+      rentedBy: null,
+      rentedAt: null,
+      remark: ''
+    })), { ordered: false });
+  }
+
+  const existingDevices = await Device.find({
+    serialNumber: { $in: importedDevices.map((device) => device.serialNumber) }
+  }).lean();
+  const existingBySerial = new Map(existingDevices.map((device) => [device.serialNumber, device]));
+  const operations = importedDevices.map((device) => {
+    const existing = existingBySerial.get(device.serialNumber);
+    const operationalFields = existing?.rentedBy
+      ? {}
+      : { status: device.status, statusReason: device.statusReason };
+    return {
+      updateOne: {
+        filter: { serialNumber: device.serialNumber },
+        update: {
+          $set: {
+            deviceInfo: device.deviceInfo,
+            modelName: device.modelName,
+            osName: device.osName,
+            osVersion: device.osVersion,
+            details: device.details,
+            ...operationalFields
+          },
+          $setOnInsert: { rentedBy: null, rentedAt: null, remark: '' }
+        },
+        upsert: true
+      }
+    };
+  });
+  return Device.bulkWrite(operations, { ordered: false });
+};
 
 const initDevices = async (force = false, exportPath = null) => {
   try {
@@ -208,6 +275,28 @@ const initDevices = async (force = false, exportPath = null) => {
     }
 
     log('Available sheet names:', workbook.SheetNames);
+
+    const preferredSheetName = workbook.SheetNames.find((name) =>
+      name === '임포트용'
+    );
+    if (preferredSheetName) {
+      const parsedWorkbook = parseDeviceWorkbook(xlsx, workbook);
+      rawDevices = parsedWorkbook.devices;
+      if (rawDevices.length === 0) throw new Error('No devices found in Excel file');
+
+      const result = await persistImportedDevices(rawDevices, force);
+      await ExportHistory.create({
+        timestamp: new Date(),
+        filePath: `/exports/${path.basename(importFilePath)}`,
+        recordCount: rawDevices.length,
+        deletedCount: 0,
+        performedBy: 'system',
+        action: 'import',
+        exportType: 'device'
+      });
+      log(`Imported ${rawDevices.length} devices from ${preferredSheetName}`);
+      return result;
+    }
 
     // 시트 이름 동적으로 매핑
     let androidSheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('aos'));
@@ -356,6 +445,25 @@ const initDevices = async (force = false, exportPath = null) => {
     throw error;
   }
 };
+
+app.post('/api/admin/upload-devices', adminAuth, excelUpload.single('excelFile'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: '엑셀 파일을 선택해주세요.' });
+    const force = req.body.force === 'true';
+    const result = await initDevices(force, req.file.path);
+    res.json({
+      message: '디바이스 엑셀 임포트가 완료되었습니다.',
+      fileName: req.file.originalname,
+      processedCount: Array.isArray(result) ? result.length : undefined
+    });
+  } catch (error) {
+    console.error('Device upload error:', error);
+    if (error.message.includes('Invalid devices found')) {
+      return res.status(400).json(JSON.parse(error.message));
+    }
+    res.status(500).json({ message: '엑셀 임포트 실패', error: error.message });
+  }
+});
 
 app.post('/api/admin/init-devices', adminAuth, async (req, res) => {
   try {

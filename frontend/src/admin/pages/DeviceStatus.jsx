@@ -25,6 +25,7 @@ const formatRentedAt = (rentedAt) => {
 const DeviceStatus = () => {
   const { user } = useAuth();
   const [devices, setDevices] = useState([]);
+  const [allDevices, setAllDevices] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
@@ -44,16 +45,24 @@ const DeviceStatus = () => {
 
   const fetchStatus = async () => {
     try {
-      const response = await axios.get(`${apiUrl}/api/devices/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.data && Array.isArray(response.data)) {
-        setDevices(response.data);
-        setFilteredDevices(response.data);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [statusResponse, devicesResponse] = await Promise.all([
+        axios.get(`${apiUrl}/api/devices/status`, { headers }),
+        axios.get(`${apiUrl}/api/devices`, { headers }),
+      ]);
+      const rentedDevices = Array.isArray(statusResponse.data) ? statusResponse.data : [];
+      const activeDevices = Array.isArray(devicesResponse.data)
+        ? devicesResponse.data.filter(device => device && device.status === 'active')
+        : [];
+
+      if (rentedDevices.length > 0) {
+        setDevices(rentedDevices);
+        setFilteredDevices(rentedDevices);
       } else {
         setDevices([]);
         setFilteredDevices([]);
       }
+      setAllDevices(activeDevices);
       setError(null);
     } catch (err) {
       setError('디바이스 상태를 불러오지 못했습니다. 서버를 확인해 주세요.');
@@ -84,13 +93,36 @@ const DeviceStatus = () => {
     setSelectedSerial('');
   };
 
+  const availableCount = allDevices.filter(device => !device.rentedBy).length;
+  const rentedCount = allDevices.filter(device => device.rentedBy).length;
+  const myCount = allDevices.filter(device => device.rentedBy?.name === user?.name).length;
+
   return (
     <div className="min-h-screen bg-paper">
       <div className="page-wrap">
         <h1 className="page-title">대여 현황</h1>
         <p className="page-sub">현재 대여 중인 디바이스 목록입니다</p>
 
-        <div className="flex gap-2 mt-5 mb-4 flex-wrap items-center">
+        <div className="flex gap-2.5 mt-5 mb-4 flex-wrap">
+          <div className="stat-card">
+            <div className="stat-card-label">전체</div>
+            <div className="stat-card-value">{allDevices.length}</div>
+          </div>
+          <div className="stat-card" style={{ borderTop: '3px solid var(--ok)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+            <div className="stat-card-label">대여 가능</div>
+            <div className="stat-card-value" style={{ color: 'var(--ok)' }}>{availableCount}</div>
+          </div>
+          <div className="stat-card" style={{ borderTop: '3px solid var(--warn)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+            <div className="stat-card-label">대여중</div>
+            <div className="stat-card-value" style={{ color: 'var(--warn)' }}>{rentedCount}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-label">내 대여</div>
+            <div className="stat-card-value" style={{ color: 'var(--accent)' }}>{myCount}</div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4 flex-wrap items-center">
           <div className="relative flex-1 min-w-[220px]">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-hint pointer-events-none">
               <SearchIcon size={14} />

@@ -451,11 +451,52 @@ router.post('/manage/register', adminAuth, async (req, res) => {
 router.post('/manage/delete', adminAuth, async (req, res) => {
   const { serialNumber } = req.body;
   try {
-    const device = await Device.findOneAndDelete({ serialNumber });
-    if (!device) return res.status(404).json({ message: "Device not found" });
+    const device = await Device.findOneAndDelete({ serialNumber, rentedBy: null });
+    if (!device) {
+      const existingDevice = await Device.findOne({ serialNumber }).select('rentedBy');
+      if (!existingDevice) return res.status(404).json({ message: "Device not found" });
+      if (existingDevice.rentedBy) {
+        return res.status(409).json({
+          message: '대여 중인 디바이스는 삭제할 수 없습니다. 먼저 반납 처리해주세요.'
+        });
+      }
+      return res.status(409).json({ message: 'Device state changed. Please try again.' });
+    }
     res.json({ message: "Device deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+router.post('/manage/update-details', adminAuth, async (req, res) => {
+  const { serialNumber, deviceInfo, modelName, osName, osVersion, details = {} } = req.body;
+  if (!serialNumber) return res.status(400).json({ message: 'Serial number is required' });
+
+  const detailKeys = [
+    'sourceSheet', 'sourceStatus', 'category', 'manufacturer', 'modelNumber',
+    'chipset', 'cpu', 'gpu', 'memory', 'bluetooth', 'screenSize', 'resolution',
+    'registeredAt', 'checkedAt', 'note', 'udid'
+  ];
+  const sanitizedDetails = Object.fromEntries(detailKeys.map((key) => [key, String(details[key] || '').trim()]));
+
+  try {
+    const device = await Device.findOneAndUpdate(
+      { serialNumber },
+      {
+        $set: {
+          deviceInfo: String(deviceInfo || modelName || '').trim() || serialNumber,
+          modelName: String(modelName || deviceInfo || '').trim() || serialNumber,
+          osName: String(osName || '').trim(),
+          osVersion: String(osVersion || '').trim(),
+          details: sanitizedDetails
+        }
+      },
+      { new: true, runValidators: true }
+    );
+    if (!device) return res.status(404).json({ message: 'Device not found' });
+    res.json({ message: 'Device details updated successfully', device });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

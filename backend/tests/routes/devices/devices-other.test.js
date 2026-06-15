@@ -153,5 +153,21 @@ describe('Devices API - manage endpoints (update-status / delete)', () => {
       expect(res.status).toBe(404);
       expect(res.body.message).toBe('Device not found');
     });
+
+    it('should not delete a rented device', async () => {
+      await Device.updateOne(
+        { serialNumber: 'TEST001' },
+        { rentedBy: { name: 'Renter', affiliation: 'QA' }, rentedAt: new Date() }
+      );
+
+      const res = await request(app)
+        .post('/api/devices/manage/delete')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ serialNumber: 'TEST001' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('대여 중인 디바이스는 삭제할 수 없습니다. 먼저 반납 처리해주세요.');
+      expect(await Device.findOne({ serialNumber: 'TEST001' })).not.toBeNull();
+    });
   });
 });

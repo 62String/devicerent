@@ -21,7 +21,28 @@ const DeviceSchema = new Schema({
   rentedAt: { type: Date, default: null },
   status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' },
   statusReason: { type: String, default: '' },
-  remark: { type: String, default: '' }
+  remark: { type: String, default: '' },
+  details: {
+    type: {
+      sourceSheet: { type: String, default: '' },
+      sourceStatus: { type: String, default: '' },
+      category: { type: String, default: '' },
+      manufacturer: { type: String, default: '' },
+      modelNumber: { type: String, default: '' },
+      chipset: { type: String, default: '' },
+      cpu: { type: String, default: '' },
+      gpu: { type: String, default: '' },
+      memory: { type: String, default: '' },
+      bluetooth: { type: String, default: '' },
+      screenSize: { type: String, default: '' },
+      resolution: { type: String, default: '' },
+      registeredAt: { type: String, default: '' },
+      checkedAt: { type: String, default: '' },
+      note: { type: String, default: '' },
+      udid: { type: String, default: '' }
+    },
+    default: () => ({})
+  }
 });
 
 module.exports = mongoose.model('Device', DeviceSchema);

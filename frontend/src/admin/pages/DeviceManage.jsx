@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../../utils/AuthContext';
 import { getApiUrl } from '../../utils/api';
 import { SearchIcon, XIcon, DownloadIcon, RefreshIcon, ClockIcon } from '../../components/Icons';
+import DeviceDetailsModal from '../../components/DeviceDetailsModal';
 
 const STATUS_BADGE = {
   active: { label: '활성', className: 'badge badge-ok' },
@@ -28,13 +29,16 @@ const DeviceManage = () => {
   const [showInitModal, setShowInitModal] = useState(false);
   const [showExportConfirmModal, setShowExportConfirmModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailDevice, setDetailDevice] = useState(null);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [importFile, setImportFile] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [downloadFileName, setDownloadFileName] = useState('');
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [newStatus, setNewStatus] = useState('active');
   const [statusReason, setStatusReason] = useState('');
   const [forceInit, setForceInit] = useState(false);
-  const [latestExportPath, setLatestExportPath] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('');
@@ -148,8 +152,13 @@ const DeviceManage = () => {
     }
   };
 
-  const openDeleteModal = (serialNumber) => {
-    setSelectedDevice({ serialNumber });
+  const openDeleteModal = (device) => {
+    if (device.rentedBy) {
+      setMessage('대여 중인 디바이스는 삭제할 수 없습니다. 먼저 반납 처리해주세요.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+    setSelectedDevice(device);
     setShowDeleteModal(true);
   };
 
@@ -168,7 +177,7 @@ const DeviceManage = () => {
       setTimeout(() => setMessage(''), 3000);
       fetchDevices();
     } catch (err) {
-      setMessage('삭제 실패');
+      setMessage(err.response?.data?.message || '삭제 실패');
       setTimeout(() => setMessage(''), 3000);
     } finally {
       closeDeleteModal();
@@ -210,33 +219,47 @@ const DeviceManage = () => {
     }
   };
 
-  const handleInitDevices = async () => {
+  const handleExcelImport = async () => {
+    if (!importFile) {
+      setMessage('임포트할 엑셀 파일을 선택해주세요.');
+      return;
+    }
     try {
-      await axios.post(
-        `${apiUrl}/api/admin/init-devices`,
-        { force: forceInit, exportPath: latestExportPath },
-        {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          withCredentials: true,
-        }
-      );
-      setMessage('디바이스 초기화 성공');
+      const formData = new FormData();
+      formData.append('excelFile', importFile);
+      formData.append('force', String(forceInit));
+      await axios.post(`${apiUrl}/api/admin/upload-devices`, formData, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      setMessage('디바이스 엑셀 임포트 성공');
       setTimeout(() => setMessage(''), 3000);
+      setImportFile(null);
       fetchDevices();
     } catch (error) {
-      setMessage(error.response?.data?.message || '디바이스 초기화 실패');
+      setMessage(error.response?.data?.message || '디바이스 엑셀 임포트 실패');
       setTimeout(() => setMessage(''), 3000);
     }
   };
 
   const openInitModal = (force) => {
-    setForceInit(force);
-    setShowInitModal(true);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setImportFile(file);
+      setForceInit(force);
+      setShowInitModal(true);
+    };
+    input.click();
   };
 
   const closeInitModal = () => {
     setShowInitModal(false);
     setForceInit(false);
+    setImportFile(null);
   };
 
   const confirmInit = () => {
@@ -247,11 +270,46 @@ const DeviceManage = () => {
   const closeExportConfirmModal = () => {
     setShowExportConfirmModal(false);
     setForceInit(false);
+    setImportFile(null);
   };
 
   const confirmExportAndInit = () => {
-    handleInitDevices();
+    handleExcelImport();
     setShowExportConfirmModal(false);
+  };
+
+  const openDetailModal = (device) => {
+    setDetailDevice(device);
+    setShowDetailModal(true);
+  };
+
+  const closeDetailModal = () => {
+    setShowDetailModal(false);
+    setDetailDevice(null);
+  };
+
+  const handleSaveDetails = async (draft) => {
+    setSavingDetails(true);
+    try {
+      const response = await axios.post(`${apiUrl}/api/devices/manage/update-details`, {
+        serialNumber: detailDevice.serialNumber,
+        ...draft,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      setDevices((current) => current.map((device) =>
+        device.serialNumber === response.data.device.serialNumber ? response.data.device : device
+      ));
+      setMessage('디바이스 상세 정보가 수정되었습니다.');
+      setTimeout(() => setMessage(''), 3000);
+      closeDetailModal();
+    } catch (error) {
+      setMessage(error.response?.data?.message || '상세 정보 수정 실패');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setSavingDetails(false);
+    }
   };
 
   const closeDownloadModal = () => {
@@ -286,7 +344,6 @@ const DeviceManage = () => {
       setDownloadUrl(url);
       setDownloadFileName(fileName);
       setShowDownloadModal(true);
-      setLatestExportPath(fileName);
       setMessage('엑셀 파일이 준비되었습니다. 다운로드 버튼을 눌러 저장해 주세요.');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -508,7 +565,7 @@ const DeviceManage = () => {
             devices.length > 0 ? (
               <>
                 <div className="card overflow-x-auto">
-                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 900 }}>
+                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 1000 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 92 }} className="cursor-pointer select-none" onClick={() => handleSort('serialNumber')}>
@@ -521,7 +578,7 @@ const DeviceManage = () => {
                         <th style={{ width: 100 }}>대여일시</th>
                         <th style={{ width: 76 }}>상태</th>
                         <th>상태 변경 사유</th>
-                        <th style={{ width: 150 }}></th>
+                        <th style={{ width: 240 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -559,11 +616,19 @@ const DeviceManage = () => {
                             </td>
                             <td className="text-right">
                               <div className="flex gap-1.5 justify-end">
+                                <button onClick={() => openDetailModal(device)} className="btn btn-outline btn-sm">상세 정보</button>
                                 <button onClick={() => openStatusModal(device)} className="btn btn-outline btn-sm">상태 변경</button>
                                 <button
-                                  onClick={() => openDeleteModal(device.serialNumber)}
+                                  onClick={() => openDeleteModal(device)}
+                                  disabled={Boolean(device.rentedBy)}
+                                  title={device.rentedBy ? '대여 중인 디바이스는 삭제할 수 없습니다.' : '삭제'}
                                   className="btn btn-sm"
-                                  style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)' }}
+                                  style={{
+                                    background: 'var(--danger-bg)',
+                                    color: 'var(--danger-text)',
+                                    opacity: device.rentedBy ? 0.45 : 1,
+                                    cursor: device.rentedBy ? 'not-allowed' : 'pointer'
+                                  }}
                                 >
                                   삭제
                                 </button>
@@ -581,6 +646,16 @@ const DeviceManage = () => {
               <div className="card p-10 text-center text-sub text-sm">디바이스 목록이 없습니다.</div>
             )
           )
+        )}
+
+        {showDetailModal && detailDevice && (
+          <DeviceDetailsModal
+            device={detailDevice}
+            canEdit
+            saving={savingDetails}
+            onClose={closeDetailModal}
+            onSave={handleSaveDetails}
+          />
         )}
 
         {showDeleteModal && (

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
 import { getApiUrl } from './utils/api';
 import { SearchIcon, XIcon } from './components/Icons';
+import DeviceDetailsModal from './components/DeviceDetailsModal';
 
 const formatOs = (osName, osVersion) => {
   if (!osName && !osVersion) return 'N/A';
@@ -36,6 +37,7 @@ function Devices() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showRemarkViewModal, setShowRemarkViewModal] = useState(false);
+  const [detailDevice, setDetailDevice] = useState(null);
   const [currentSerialNumber, setCurrentSerialNumber] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState('active');
   const [statusReason, setStatusReason] = useState('');
@@ -228,6 +230,9 @@ function Devices() {
     setCurrentSerialNumber(null);
   };
 
+  const openDetailModal = (device) => setDetailDevice(device);
+  const closeDetailModal = () => setDetailDevice(null);
+
   const handleReturn = async (withStatusChange = false) => {
     if (!currentSerialNumber) {
       alert('반납할 디바이스를 선택해 주세요.');
@@ -364,7 +369,7 @@ function Devices() {
                       대여일시{sortIndicator('rentedAt')}
                     </th>
                     <th>특이사항</th>
-                    <th style={{ width: 76 }}></th>
+                    <th style={{ width: 116 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,6 +420,14 @@ function Devices() {
                           )}
                         </td>
                         <td className="text-right">
+                          <button
+                            type="button"
+                            className="icon-btn mr-2"
+                            style={{ width: 28, height: 28, borderRadius: '50%', fontWeight: 700, fontFamily: 'serif' }}
+                            aria-label={`${device.serialNumber} 상세 정보`}
+                            title="상세 정보"
+                            onClick={() => openDetailModal(device)}
+                          >i</button>
                           {device.rentedBy ? (
                             isMine ? (
                               <button onClick={() => openReturnModal(device.serialNumber)} className="btn btn-accent-outline btn-sm">반납</button>
@@ -482,6 +495,8 @@ function Devices() {
         ) : (
           <div className="card p-10 text-center text-sub text-sm">표시할 디바이스가 없습니다.</div>
         )}
+
+        {detailDevice && <DeviceDetailsModal device={detailDevice} onClose={closeDetailModal} />}
 
         {showConfirmModal && (
           <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
