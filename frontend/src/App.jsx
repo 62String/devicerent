@@ -150,8 +150,14 @@ function AppContent() {
           {user && <Navbar />}
           <Routes>
             {/* 로그인 페이지 */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/mobile/login" element={<MobileLogin />} />
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/devices" replace /> : <Login />}
+            />
+            <Route
+              path="/mobile/login"
+              element={user ? <Navigate to="/mobile/rent" replace /> : <MobileLogin />}
+            />
 
             {/* 등록 페이지 */}
             <Route path="/register" element={<ProtectedRoute element={<Register />} isMobile={isMobile} />} />
