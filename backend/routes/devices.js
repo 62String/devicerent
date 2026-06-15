@@ -131,6 +131,82 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// 관리자 대시보드 집계 (관리자 전용)
+// 주의: 2차 가공 통계(평균 대여기간/반출비율/OS 선호도)는 다음 KPI용으로 의도적으로 제외.
+//       여기서는 "현재 상태" 집계만 제공한다.
+const OVERDUE_HOURS = 72; // 3일 이상 미반납이면 주의(존버) 대상
+
+router.get('/dashboard', adminAuth, async (req, res) => {
+  try {
+    const now = Date.now();
+    const devices = await Device.find().lean();
+
+    const counts = { total: devices.length, available: 0, rented: 0, maintenance: 0, overdue: 0 };
+    const osDistribution = {};
+    const statusDistribution = { active: 0, repair: 0, inactive: 0 };
+    const rentedDevices = [];
+
+    devices.forEach((device) => {
+      // 상태 분포
+      const status = device.status || 'active';
+      statusDistribution[status] = (statusDistribution[status] || 0) + 1;
+      if (status === 'repair' || status === 'inactive') counts.maintenance += 1;
+
+      // OS 분포 (보유 기준)
+      const os = device.osName || '미지정';
+      osDistribution[os] = (osDistribution[os] || 0) + 1;
+
+      // 대여 가능/대여중 + 경과시간
+      if (device.rentedBy) {
+        counts.rented += 1;
+        const rentedAtMs = device.rentedAt ? new Date(device.rentedAt).getTime() : null;
+        const elapsedHours = rentedAtMs ? Math.floor((now - rentedAtMs) / (1000 * 60 * 60)) : null;
+        if (elapsedHours !== null && elapsedHours >= OVERDUE_HOURS) counts.overdue += 1;
+        rentedDevices.push({
+          serialNumber: device.serialNumber,
+          modelName: device.modelName || device.deviceInfo || 'N/A',
+          osName: device.osName || '',
+          osVersion: device.osVersion || '',
+          renterName: device.rentedBy.name || '',
+          affiliation: device.rentedBy.affiliation || '',
+          rentedAt: device.rentedAt || null,
+          elapsedHours,
+          overdue: elapsedHours !== null && elapsedHours >= OVERDUE_HOURS,
+        });
+      } else if (status === 'active') {
+        counts.available += 1;
+      }
+    });
+
+    // 경과시간 내림차순 (오래 안 돌려준 순) — null은 뒤로
+    rentedDevices.sort((a, b) => (b.elapsedHours ?? -1) - (a.elapsedHours ?? -1));
+
+    const recentActivity = (await RentalHistory.find()
+      .sort({ timestamp: -1 })
+      .limit(8)
+      .lean())
+      .map((record) => ({
+        action: record.action,
+        serialNumber: record.serialNumber,
+        userName: record.userDetails?.name || '알 수 없음',
+        affiliation: record.userDetails?.affiliation || '',
+        timestamp: record.timestamp,
+      }));
+
+    res.json({
+      counts,
+      osDistribution,
+      statusDistribution,
+      rentedDevices,
+      recentActivity,
+      overdueThresholdHours: OVERDUE_HOURS,
+    });
+  } catch (error) {
+    console.error('Dashboard aggregation error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // 대여 히스토리 (모든 사용자 접근 가능)
 router.get('/history', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
