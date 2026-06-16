@@ -124,7 +124,7 @@ router.get('/status', async (req, res) => {
     const devices = await Device.find({ rentedBy: { $ne: null } }).lean();
     res.json(devices);
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error" });
@@ -224,7 +224,11 @@ router.get('/dashboard', adminAuth, async (req, res) => {
 router.get('/longterm/pending', requireRoleLevel(3), async (req, res) => {
   try {
     const now = Date.now();
-    const devices = await Device.find({ rentalType: 'longterm', longTermStatus: 'pending' }).lean();
+    const devices = await Device.find({
+      rentalType: 'longterm',
+      longTermStatus: 'pending',
+      rentedBy: { $ne: null }
+    }).lean();
     const pending = devices.map((d) => {
       const rentedAtMs = d.rentedAt ? new Date(d.rentedAt).getTime() : null;
       const elapsedHours = rentedAtMs ? Math.floor((now - rentedAtMs) / (1000 * 60 * 60)) : null;
@@ -253,11 +257,17 @@ router.post('/longterm/approve', requireRoleLevel(3), async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const device = await Device.findOneAndUpdate(
-      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending' },
+      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: { $ne: null } },
       { $set: { longTermStatus: 'approved', approvedBy: req.user.name, approvedAt: new Date() } },
       { new: true }
     );
-    if (!device) return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+    if (!device) {
+      const current = await Device.findOne({ serialNumber, rentalType: 'longterm', longTermStatus: 'pending' }).lean();
+      if (current && !current.rentedBy) {
+        return res.status(409).json({ message: '이미 반납된 장기대여 요청입니다. 승인할 수 없습니다.' });
+      }
+      return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+    }
     res.json({ message: '장기대여가 승인되었습니다.', device });
   } catch (error) {
     console.error('Longterm approve error:', error);
@@ -270,11 +280,19 @@ router.post('/longterm/reject', requireRoleLevel(3), async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const device = await Device.findOneAndUpdate(
-      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending' },
+      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: { $ne: null } },
       { $set: { rentalType: 'normal', longTermStatus: 'none', approvedBy: '', approvedAt: null } },
       { new: true }
     );
-    if (!device) return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+    if (!device) {
+      const stale = await Device.findOneAndUpdate(
+        { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: null },
+        { $set: { rentalType: 'normal', longTermStatus: 'none', approvedBy: '', approvedAt: null } },
+        { new: true }
+      );
+      if (stale) return res.json({ message: '이미 반납된 장기대여 요청을 승인 대기 목록에서 해제했습니다.', device: stale });
+      return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+    }
     res.json({ message: '장기대여 신청이 거절되어 일반대여로 전환되었습니다.', device });
   } catch (error) {
     console.error('Longterm reject error:', error);
@@ -292,7 +310,7 @@ router.get('/history', async (req, res) => {
     const history = await RentalHistory.find().sort({ timestamp: -1 }).lean();
     res.json(history);
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error" });
@@ -689,7 +707,7 @@ router.post('/manage/update-status', async (req, res) => {
     res.json({ message: "Device status updated successfully", device });
   } catch (error) {
     console.error('Error updating device status:', error);
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
@@ -709,7 +727,7 @@ router.get('/', async (req, res) => {
     }
     res.json(devices);
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
@@ -729,7 +747,7 @@ router.get('/available', async (req, res) => {
     }
     res.json(devices);
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
@@ -794,6 +812,8 @@ router.post('/rent-device', async (req, res) => {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'rent',
+      rentalType: normalizedRentalType,
+      longTermStatus,
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
       deviceInfo: deviceInfo,
       remark: remark,
@@ -802,7 +822,7 @@ router.post('/rent-device', async (req, res) => {
     await RentalHistory.create(historyData);
     res.json({ message: "Device rented successfully" });
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });
@@ -874,6 +894,8 @@ router.post('/return-device', async (req, res) => {
       serialNumber: device.serialNumber,
       userId: user.id,
       action: 'return',
+      rentalType: device.rentalType || 'normal',
+      longTermStatus: device.longTermStatus || 'none',
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
       deviceInfo: deviceInfo,
       timestamp: new Date()
@@ -896,7 +918,7 @@ router.post('/return-device', async (req, res) => {
     res.json({ message: "Device returned successfully" });
   } catch (error) {
     console.error('Return error:', error);
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });

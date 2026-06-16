@@ -45,6 +45,8 @@ beforeEach(async () => {
       rentedBy: { name: '한지민', affiliation: 'QA 3팀' }, rentalType: 'longterm', longTermStatus: 'pending', remark: '출장 검수', rentedAt: new Date(now - 100 * HOUR) },
     { serialNumber: 'NRM01', deviceInfo: 'iPhone', osName: 'iOS', osVersion: '18', modelName: 'iPhone 15', status: 'active',
       rentedBy: { name: '유기현', affiliation: 'QA 2팀' }, rentalType: 'normal', longTermStatus: 'none', rentedAt: new Date(now - 1 * HOUR) },
+    { serialNumber: 'STALE01', deviceInfo: 'Pixel', osName: 'Android', osVersion: '15', modelName: 'Pixel 9', status: 'active',
+      rentedBy: null, rentalType: 'longterm', longTermStatus: 'pending', rentedAt: null },
   ]);
 });
 
@@ -97,6 +99,14 @@ describe('장기대여 승인 워크플로우 (팀장 이상 전용)', () => {
       const res = await request(app).post('/api/devices/longterm/approve').set('Authorization', 'Bearer team').send({ serialNumber: 'NRM01' });
       expect(res.status).toBe(404);
     });
+
+    it('이미 반납된 pending 찌꺼기는 승인하지 않는다', async () => {
+      const res = await request(app).post('/api/devices/longterm/approve').set('Authorization', 'Bearer team').send({ serialNumber: 'STALE01' });
+      expect(res.status).toBe(409);
+      const device = await Device.findOne({ serialNumber: 'STALE01' });
+      expect(device.longTermStatus).toBe('pending');
+      expect(device.approvedAt).toBeFalsy();
+    });
   });
 
   describe('POST /api/devices/longterm/reject', () => {
@@ -106,6 +116,15 @@ describe('장기대여 승인 워크플로우 (팀장 이상 전용)', () => {
       const device = await Device.findOne({ serialNumber: 'PND01' });
       expect(device.rentalType).toBe('normal');
       expect(device.longTermStatus).toBe('none');
+    });
+
+    it('이미 반납된 pending 찌꺼기는 승인 대기에서 해제한다', async () => {
+      const res = await request(app).post('/api/devices/longterm/reject').set('Authorization', 'Bearer team').send({ serialNumber: 'STALE01' });
+      expect(res.status).toBe(200);
+      const device = await Device.findOne({ serialNumber: 'STALE01' });
+      expect(device.rentalType).toBe('normal');
+      expect(device.longTermStatus).toBe('none');
+      expect(device.rentedBy).toBeNull();
     });
   });
 });

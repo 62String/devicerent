@@ -20,6 +20,11 @@ const STATUS_BADGE = {
   inactive: { label: '비활성', className: 'badge badge-neutral' },
 };
 
+const LONGTERM_BADGE = {
+  pending: { label: '장기 승인대기', className: 'badge badge-warn' },
+  approved: { label: '장기 승인완료', className: 'badge badge-ok' },
+};
+
 function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
   const [originalPairs, setOriginalPairs] = useState([]);
@@ -104,6 +109,8 @@ function DeviceHistory() {
                 rentTime: new Date(matchingRent.timestamp).toLocaleString(),
                 returnTime: new Date(record.timestamp).toLocaleString(),
                 remark: matchingRent.remark || '',
+                rentalType: matchingRent.rentalType || record.rentalType || device?.rentalType || 'normal',
+                longTermStatus: matchingRent.longTermStatus || record.longTermStatus || device?.longTermStatus || 'none',
                 status: device?.status || 'N/A',
                 statusReason: device?.statusReason || ''
               });
@@ -118,6 +125,8 @@ function DeviceHistory() {
                 rentTime: 'N/A',
                 returnTime: new Date(record.timestamp).toLocaleString(),
                 remark: '',
+                rentalType: record.rentalType || device?.rentalType || 'normal',
+                longTermStatus: record.longTermStatus || device?.longTermStatus || 'none',
                 status: device?.status || 'N/A',
                 statusReason: device?.statusReason || ''
               });
@@ -137,6 +146,8 @@ function DeviceHistory() {
               rentTime: new Date(rent.timestamp).toLocaleString(),
               returnTime: 'N/A',
               remark: rent.remark || '',
+              rentalType: rent.rentalType || device?.rentalType || 'normal',
+              longTermStatus: rent.longTermStatus || device?.longTermStatus || 'none',
               status: device?.status || 'N/A',
               statusReason: device?.statusReason || ''
             });
@@ -163,7 +174,7 @@ function DeviceHistory() {
     return () => {
       isMounted = false;
     };
-  }, [token, selectedPeriod, customDateRange]);
+  }, [token, selectedPeriod, customDateRange, devices]);
 
   const handleSearch = (value) => {
     setSearchSerial(value);
@@ -326,7 +337,7 @@ function DeviceHistory() {
         {!error && historyPairs.length > 0 && (
           <>
             <div className="card overflow-x-auto">
-              <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 860 }}>
+              <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 960 }}>
                 <thead>
                   <tr>
                     <th style={{ width: 92 }}>시리얼</th>
@@ -335,6 +346,7 @@ function DeviceHistory() {
                     <th style={{ width: 130 }}>대여 시간</th>
                     <th style={{ width: 130 }}>반납 시간</th>
                     <th style={{ width: 70 }}>상태</th>
+                    <th style={{ width: 100 }}>대여 유형</th>
                     <th style={{ width: 120 }}>상태 변경 사유</th>
                     <th>특이사항</th>
                   </tr>
@@ -342,6 +354,7 @@ function DeviceHistory() {
                 <tbody>
                   {currentPairs.map((pair, index) => {
                     const badge = STATUS_BADGE[pair.status];
+                    const longtermBadge = pair.rentalType === 'longterm' ? LONGTERM_BADGE[pair.longTermStatus] : null;
                     return (
                       <tr key={index}>
                         <td className="td-mono">{pair.serialNumber}</td>
@@ -360,6 +373,11 @@ function DeviceHistory() {
                           {badge
                             ? <span className={badge.className}>{badge.label}</span>
                             : <span className="td-hint">—</span>}
+                        </td>
+                        <td>
+                          {longtermBadge
+                            ? <span className={longtermBadge.className}>{longtermBadge.label}</span>
+                            : <span className="badge badge-neutral">일반</span>}
                         </td>
                         <td>
                           {pair.statusReason ? (

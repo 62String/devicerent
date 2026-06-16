@@ -6,6 +6,8 @@ const RentalHistorySchema = new Schema({
   serialNumber: { type: String, required: true },
   userId: { type: String, required: true },
   action: { type: String, enum: ['rent', 'return'], required: true },
+  rentalType: { type: String, enum: ['normal', 'longterm'], default: 'normal' },
+  longTermStatus: { type: String, enum: ['none', 'pending', 'approved'], default: 'none' },
   timestamp: { type: Date, default: Date.now },
   userDetails: {
     name: { type: String, required: true },

@@ -96,7 +96,7 @@ router.get('/me', async (req, res) => {
     res.json({ user: returnData });
   } catch (error) {
     console.error('Error fetching user:', error.name, error.message);
-    if (error.name === 'JsonWebTokenError') {
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(500).json({ message: "Server error", error: error.message });

@@ -21,6 +21,15 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
 
+  const clearAuthAndRedirect = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    if (!['/login', '/register'].includes(window.location.pathname)) {
+      window.location.href = '/login';
+    }
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -69,16 +78,12 @@ export function AuthProvider({ children }) {
         console.error('AuthContext - Error initializing auth:', error);
         console.error('Error details:', error.response?.data || error.message);
         // 토큰이 있고 API만 실패한 경우, 기존 로컬 데이터 유지
-        if (localStorage.getItem('token') && localStorage.getItem('user')) {
-          console.log('Keeping existing user data due to API failure');
+        if ([401, 403, 404].includes(error.response?.status)) {
+          clearAuthAndRedirect();
+        } else if (localStorage.getItem('token') && localStorage.getItem('user')) {
+          console.log('Keeping existing user data due to temporary API failure');
         } else {
-          setUser(null);
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
-          if (!['/login', '/register'].includes(window.location.pathname)) {
-            console.log('No valid token/user, redirecting to login');
-            window.location.href = '/login';
-          }
+          clearAuthAndRedirect();
         }
       } finally {
         setLoading(false);
@@ -90,10 +95,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     console.log('Logging out user');
-    setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    window.location.href = '/login';
+    clearAuthAndRedirect();
   };
 
   return (
