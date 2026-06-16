@@ -42,6 +42,7 @@ function Devices() {
   const [selectedStatus, setSelectedStatus] = useState('active');
   const [statusReason, setStatusReason] = useState('');
   const [remark, setRemark] = useState('');
+  const [rentalType, setRentalType] = useState('normal');
   const [selectedRemark, setSelectedRemark] = useState('');
   const [showAllDevices, setShowAllDevices] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,6 +54,9 @@ function Devices() {
   const navigate = useNavigate();
 
   const apiUrl = getApiUrl();
+
+  // 기본 표시 = 대여 가능한 디바이스만 (대여중인 건 '내 디바이스'/'모든 디바이스 보기'로 확인)
+  const availableOnly = (list) => list.filter(device => device && !device.rentedBy);
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -68,10 +72,7 @@ function Devices() {
       });
       const activeDevices = (response.data || []).filter(device => device && device.status === 'active');
       setDevices(activeDevices);
-      const defaultFiltered = activeDevices.filter(device =>
-        device && (!device.rentedBy || (device.rentedBy && device.rentedBy.name === user?.name))
-      );
-      setFilteredDevices(defaultFiltered);
+      setFilteredDevices(availableOnly(activeDevices));
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to fetch devices');
       if (error.response?.status === 401) navigate('/login');
@@ -128,10 +129,7 @@ function Devices() {
     if (!showAllDevices) {
       setFilteredDevices(devices);
     } else {
-      const defaultFiltered = devices.filter(device =>
-        device && (!device.rentedBy || (device.rentedBy && device.rentedBy.name === user?.name))
-      );
-      setFilteredDevices(defaultFiltered);
+      setFilteredDevices(availableOnly(devices));
     }
     setCurrentPage(1);
   };
@@ -142,12 +140,18 @@ function Devices() {
       return;
     }
     setCurrentSerialNumber(serialNumber);
+    setRentalType('normal');
     setShowConfirmModal(true);
   };
 
   const confirmRent = () => {
     setShowConfirmModal(false);
-    setShowRemarkPrompt(true);
+    // 장기대여는 사유가 필요하므로 곧장 입력 단계로, 일반대여는 특이사항 여부부터 확인
+    if (rentalType === 'longterm') {
+      setShowRemarkModal(true);
+    } else {
+      setShowRemarkPrompt(true);
+    }
   };
 
   const handleRemarkPrompt = (hasRemark) => {
@@ -165,12 +169,14 @@ function Devices() {
       return;
     }
     try {
-      const payload = { deviceId: currentSerialNumber, remark };
+      const payload = { deviceId: currentSerialNumber, remark, rentalType };
       await axios.post(`${apiUrl}/api/devices/rent-device`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       await fetchDevices();
-      setMessage('대여가 성공적으로 완료되었습니다.');
+      setMessage(rentalType === 'longterm'
+        ? '장기대여 승인 요청이 등록되었습니다. 팀장 승인 후 확정됩니다.'
+        : '대여가 성공적으로 완료되었습니다.');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       setMessage(error.response?.data?.message || '대여 실패');
@@ -178,6 +184,7 @@ function Devices() {
     } finally {
       setShowRemarkModal(false);
       setRemark('');
+      setRentalType('normal');
       setCurrentSerialNumber(null);
     }
   };
@@ -185,6 +192,7 @@ function Devices() {
   const closeRemarkModal = () => {
     setShowRemarkModal(false);
     setRemark('');
+    setRentalType('normal');
     setCurrentSerialNumber(null);
   };
 
@@ -262,10 +270,7 @@ function Devices() {
     if (showAllDevices) {
       setFilteredDevices(devices);
     } else {
-      const defaultFiltered = devices.filter(device =>
-        device && (!device.rentedBy || (device.rentedBy && device.rentedBy.name === user?.name))
-      );
-      setFilteredDevices(defaultFiltered);
+      setFilteredDevices(availableOnly(devices));
     }
     setCurrentPage(1);
   };
@@ -343,7 +348,7 @@ function Devices() {
               className="input w-full pl-9"
             />
           </div>
-          <button onClick={resetSearch} className="btn btn-outline">초기화</button>
+          <button onClick={resetSearch} className="btn btn-outline">검색 초기화</button>
           <button onClick={showMyDevices} className="btn btn-outline">내 디바이스</button>
           <button onClick={toggleShowAllDevices} className={`btn ${showAllDevices ? 'btn-ink' : 'btn-outline'}`}>
             {showAllDevices ? '기본 보기' : '모든 디바이스 보기'}
@@ -510,9 +515,35 @@ function Devices() {
                 </div>
                 <button className="icon-btn" aria-label="닫기" onClick={() => setShowConfirmModal(false)}><XIcon size={14} /></button>
               </div>
-              <div className="modal-foot pt-4">
+              <div className="modal-body">
+                <label className="field-label">대여 유형</label>
+                <div className="flex gap-2">
+                  {[['normal', '일반 대여'], ['longterm', '장기대여 · 출장']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setRentalType(val)}
+                      className="flex-1 text-center"
+                      style={{
+                        fontSize: 13, fontWeight: 500, borderRadius: 8, padding: '9px 0', cursor: 'pointer',
+                        border: '1px solid', borderColor: rentalType === val ? 'var(--accent)' : 'var(--line)',
+                        background: rentalType === val ? 'var(--accent-soft)' : 'var(--surface)',
+                        color: rentalType === val ? 'var(--accent)' : 'var(--sub)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {rentalType === 'longterm' && (
+                  <div className="alert alert-warn mt-2.5" style={{ marginBottom: 0, fontSize: 12 }}>
+                    팀장 승인 후 정식 장기대여로 확정됩니다. 반납 예정일과 사유를 특이사항에 적어주세요.
+                  </div>
+                )}
+              </div>
+              <div className="modal-foot">
                 <button onClick={() => setShowConfirmModal(false)} className="btn btn-outline">취소</button>
-                <button onClick={confirmRent} className="btn btn-primary">대여하기</button>
+                <button onClick={confirmRent} className="btn btn-primary">{rentalType === 'longterm' ? '승인 요청' : '대여하기'}</button>
               </div>
             </div>
           </div>
@@ -540,23 +571,30 @@ function Devices() {
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
-                  <div className="modal-title">특이사항 입력</div>
+                  <div className="modal-title">{rentalType === 'longterm' ? '장기대여 사유 입력' : '특이사항 입력'}</div>
                   <div className="text-xs text-sub mt-0.5"><span className="td-mono">{currentSerialNumber}</span></div>
                 </div>
                 <button className="icon-btn" aria-label="닫기" onClick={closeRemarkModal}><XIcon size={14} /></button>
               </div>
               <div className="modal-body">
+                {rentalType === 'longterm' && (
+                  <div className="alert alert-warn" style={{ fontSize: 12 }}>
+                    팀장 승인 후 정식 장기대여로 확정됩니다.
+                  </div>
+                )}
                 <textarea
                   value={remark}
                   onChange={(e) => setRemark(e.target.value)}
-                  placeholder="예) 액정 좌측 상단 미세 기스, 케이스 동봉"
+                  placeholder={rentalType === 'longterm'
+                    ? '예) 6/30까지 ○○프로젝트 업데이트 대응 장기 대여'
+                    : '예) 액정 좌측 상단 미세 기스, 케이스 동봉'}
                   className="input w-full resize-none"
                   rows={4}
                 />
               </div>
               <div className="modal-foot">
                 <button onClick={closeRemarkModal} className="btn btn-outline">취소</button>
-                <button onClick={() => { setShowRemarkModal(false); submitRent(); }} className="btn btn-primary">대여하기</button>
+                <button onClick={() => { setShowRemarkModal(false); submitRent(); }} className="btn btn-primary">{rentalType === 'longterm' ? '승인 요청' : '대여하기'}</button>
               </div>
             </div>
           </div>

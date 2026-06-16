@@ -20,6 +20,8 @@ function ThemeToggle() {
   );
 }
 
+const isTeamLeadOrAbove = (u) => ['팀장', '실장', '센터장'].includes(u?.position);
+
 function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -61,6 +63,12 @@ function Navbar() {
       <NavLink to="/devices" end className={navLinkClass}>대여하기</NavLink>
       <NavLink to="/devices/status" className={navLinkClass}>대여 현황</NavLink>
       <NavLink to="/devices/history" className={navLinkClass}>대여 히스토리</NavLink>
+      {user?.isAdmin && (
+        <NavLink to="/dashboard" className={navLinkClass}>대시보드</NavLink>
+      )}
+      {isTeamLeadOrAbove(user) && (
+        <NavLink to="/longterm/approvals" className={navLinkClass}>승인 대기</NavLink>
+      )}
       {user?.isAdmin && (
         <NavLink to="/admin" className={navLinkClass}>관리자</NavLink>
       )}

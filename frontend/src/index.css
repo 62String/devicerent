@@ -318,6 +318,7 @@
   .alert { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
   .alert-error { background: var(--danger-bg); color: var(--danger-text); }
   .alert-success { background: var(--ok-bg); color: var(--ok-text); }
+  .alert-warn { background: var(--warn-bg); color: var(--warn-text); }
 
   /* 페이지 공통 */
   .page-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }

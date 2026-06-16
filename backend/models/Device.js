@@ -19,6 +19,13 @@ const DeviceSchema = new Schema({
     default: null
   },
   rentedAt: { type: Date, default: null },
+  // 대여 유형: normal(일반 단기대여) / longterm(장기대여·출장 등).
+  rentalType: { type: String, enum: ['normal', 'longterm'], default: 'normal' },
+  // 장기대여 승인 상태: none(일반대여) / pending(승인 대기) / approved(승인 완료).
+  // 회수 대상(장기 미반납) 판정은 normal 또는 pending에만 적용 — approved는 제외.
+  longTermStatus: { type: String, enum: ['none', 'pending', 'approved'], default: 'none' },
+  approvedBy: { type: String, default: '' },   // 승인한 책임자 이름(팀장 이상)
+  approvedAt: { type: Date, default: null },
   status: { type: String, enum: ['active', 'repair', 'inactive'], default: 'active' },
   statusReason: { type: String, default: '' },
   remark: { type: String, default: '' },

@@ -96,3 +96,29 @@ export const ScanIcon = (props) => (
     <path d="M5 12h14" />
   </Svg>
 );
+
+export const AlertTriangleIcon = (props) => (
+  <Svg {...props}>
+    <path d="M12 4l9 16H3l9-16z" />
+    <path d="M12 10v4M12 17v.01" />
+  </Svg>
+);
+
+export const PlaneIcon = (props) => (
+  <Svg {...props}>
+    <path d="M10 4l9 6-9 6v-4l-6 1v-2l6 1V4z" />
+  </Svg>
+);
+
+export const CheckCircleIcon = (props) => (
+  <Svg {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+  </Svg>
+);
+
+export const CheckIcon = (props) => (
+  <Svg {...props}>
+    <path d="M5 12l5 5 9-11" />
+  </Svg>
+);

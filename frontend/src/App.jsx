@@ -6,6 +6,8 @@ import PendingUsersPage from './admin/pages/PendingUsersPage';
 import DeviceManage from './admin/pages/DeviceManage';
 import DeviceHistory from './admin/pages/DeviceHistory';
 import Devices from './Devices';
+import Dashboard from './Dashboard';
+import LongTermApproval from './admin/pages/LongTermApproval';
 import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
 import MobileLogin from './mobile/MobileLogin';
@@ -49,8 +51,10 @@ class ErrorBoundary extends Component {
   }
 }
 
+const isTeamLeadOrAbove = (u) => ['팀장', '실장', '센터장'].includes(u?.position);
+
 // ProtectedRoute 컴포넌트
-const ProtectedRoute = ({ element, isAdmin = false, isMobile }) => {
+const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isMobile }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,6 +96,11 @@ const ProtectedRoute = ({ element, isAdmin = false, isMobile }) => {
       console.log(`ProtectedRoute: Redirecting to ${redirectPath} due to not admin`);
     }
     return <Navigate to={redirectPath} replace />;
+  }
+
+  // 팀장 이상 권한 확인 (장기대여 승인 등)
+  if (requireTeamLead && !isTeamLeadOrAbove(user)) {
+    return <Navigate to={isMobile ? "/mobile/rent" : "/devices"} replace />;
   }
 
   // 모바일 디바이스 → 경로 제한
@@ -210,6 +219,26 @@ function AppContent() {
                 <ProtectedRoute
                   element={<ExportHistory />}
                   isAdmin={true}
+                  isMobile={isMobile}
+                />
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute
+                  element={<Dashboard />}
+                  isAdmin={true}
+                  isMobile={isMobile}
+                />
+              }
+            />
+            <Route
+              path="/longterm/approvals"
+              element={
+                <ProtectedRoute
+                  element={<LongTermApproval />}
+                  requireTeamLead={true}
                   isMobile={isMobile}
                 />
               }
