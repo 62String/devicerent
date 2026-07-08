@@ -16,7 +16,7 @@ const formatOs = (osName, osVersion) => {
 
 const STATUS_BADGE = {
   active: { label: '활성', className: 'badge badge-ok' },
-  repair: { label: '수리중', className: 'badge badge-warn' },
+  repair: { label: '수리 필요', className: 'badge badge-warn' },
   inactive: { label: '비활성', className: 'badge badge-neutral' },
 };
 
@@ -24,6 +24,16 @@ const LONGTERM_BADGE = {
   pending: { label: '장기 승인대기', className: 'badge badge-warn' },
   approved: { label: '장기 승인완료', className: 'badge badge-ok' },
 };
+
+const getSortTime = (pair, sortBy) => (
+  sortBy === 'returnTime' ? pair.returnTimestamp : pair.rentTimestamp
+);
+
+const sortHistoryPairs = (pairs, sortBy = 'rentTime', sortOrder = 'desc') => [...pairs].sort((a, b) => {
+  const aTime = getSortTime(a, sortBy) || 0;
+  const bTime = getSortTime(b, sortBy) || 0;
+  return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+});
 
 function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
@@ -36,6 +46,8 @@ function DeviceHistory() {
   const [remarkModalTitle, setRemarkModalTitle] = useState('특이사항');
   const [selectedPeriod, setSelectedPeriod] = useState('all');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [sortBy, setSortBy] = useState('rentTime');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [perPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const token = localStorage.getItem('token');
@@ -108,6 +120,8 @@ function DeviceHistory() {
                 userDetails: record.userDetails?.name || matchingRent.userDetails?.name || '알 수 없음',
                 rentTime: new Date(matchingRent.timestamp).toLocaleString(),
                 returnTime: new Date(record.timestamp).toLocaleString(),
+                rentTimestamp: new Date(matchingRent.timestamp).getTime(),
+                returnTimestamp: new Date(record.timestamp).getTime(),
                 remark: matchingRent.remark || '',
                 rentalType: matchingRent.rentalType || record.rentalType || device?.rentalType || 'normal',
                 longTermStatus: matchingRent.longTermStatus || record.longTermStatus || device?.longTermStatus || 'none',
@@ -124,6 +138,8 @@ function DeviceHistory() {
                 userDetails: record.userDetails?.name || '알 수 없음',
                 rentTime: 'N/A',
                 returnTime: new Date(record.timestamp).toLocaleString(),
+                rentTimestamp: 0,
+                returnTimestamp: new Date(record.timestamp).getTime(),
                 remark: '',
                 rentalType: record.rentalType || device?.rentalType || 'normal',
                 longTermStatus: record.longTermStatus || device?.longTermStatus || 'none',
@@ -145,6 +161,8 @@ function DeviceHistory() {
               userDetails: rent.userDetails?.name || '알 수 없음',
               rentTime: new Date(rent.timestamp).toLocaleString(),
               returnTime: 'N/A',
+              rentTimestamp: new Date(rent.timestamp).getTime(),
+              returnTimestamp: 0,
               remark: rent.remark || '',
               rentalType: rent.rentalType || device?.rentalType || 'normal',
               longTermStatus: rent.longTermStatus || device?.longTermStatus || 'none',
@@ -154,11 +172,7 @@ function DeviceHistory() {
           }
         });
 
-        const sortedPairs = pairs.sort((a, b) => {
-          const aTime = a.returnTime !== 'N/A' ? new Date(a.returnTime) : new Date(a.rentTime);
-          const bTime = b.returnTime !== 'N/A' ? new Date(b.returnTime) : new Date(b.rentTime);
-          return bTime - aTime;
-        });
+        const sortedPairs = sortHistoryPairs(pairs, sortBy, sortOrder);
 
         setHistoryPairs(sortedPairs);
         setOriginalPairs(sortedPairs);
@@ -174,20 +188,20 @@ function DeviceHistory() {
     return () => {
       isMounted = false;
     };
-  }, [token, selectedPeriod, customDateRange, devices]);
+  }, [token, selectedPeriod, customDateRange, devices, sortBy, sortOrder]);
 
   const handleSearch = (value) => {
     setSearchSerial(value);
     const trimmedSearch = value.trim();
     if (!trimmedSearch) {
-      setHistoryPairs(originalPairs);
+      setHistoryPairs(sortHistoryPairs(originalPairs, sortBy, sortOrder));
       setCurrentPage(1);
       return;
     }
     const filtered = originalPairs.filter(pair =>
       pair.serialNumber.toLowerCase().includes(trimmedSearch.toLowerCase())
     );
-    setHistoryPairs(filtered);
+    setHistoryPairs(sortHistoryPairs(filtered, sortBy, sortOrder));
     setCurrentPage(1);
   };
 
@@ -195,7 +209,9 @@ function DeviceHistory() {
     setSearchSerial('');
     setSelectedPeriod('all');
     setCustomDateRange({ start: '', end: '' });
-    setHistoryPairs(originalPairs);
+    setSortBy('rentTime');
+    setSortOrder('desc');
+    setHistoryPairs(sortHistoryPairs(originalPairs, 'rentTime', 'desc'));
     setCurrentPage(1);
   };
 
@@ -298,6 +314,30 @@ function DeviceHistory() {
             <option value="month">지난 1개월</option>
             <option value="custom">사용자 지정</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="input"
+            aria-label="정렬 기준"
+          >
+            <option value="rentTime">대여 날짜 기준</option>
+            <option value="returnTime">반납 날짜 기준</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => {
+              setSortOrder(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="input"
+            aria-label="정렬 방향"
+          >
+            <option value="desc">최신순</option>
+            <option value="asc">오래된순</option>
+          </select>
           {selectedPeriod === 'custom' && (
             <div className="flex items-center gap-2">
               <DatePicker
@@ -343,8 +383,28 @@ function DeviceHistory() {
                     <th style={{ width: 92 }}>시리얼</th>
                     <th style={{ width: 160 }}>디바이스 / OS</th>
                     <th style={{ width: 90 }}>대여자</th>
-                    <th style={{ width: 130 }}>대여 시간</th>
-                    <th style={{ width: 130 }}>반납 시간</th>
+                    <th
+                      style={{ width: 130 }}
+                      className="cursor-pointer select-none"
+                      onClick={() => {
+                        setSortBy('rentTime');
+                        setSortOrder(sortBy === 'rentTime' && sortOrder === 'desc' ? 'asc' : 'desc');
+                        setCurrentPage(1);
+                      }}
+                    >
+                      대여 시간{sortBy === 'rentTime' ? (sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
+                    </th>
+                    <th
+                      style={{ width: 130 }}
+                      className="cursor-pointer select-none"
+                      onClick={() => {
+                        setSortBy('returnTime');
+                        setSortOrder(sortBy === 'returnTime' && sortOrder === 'desc' ? 'asc' : 'desc');
+                        setCurrentPage(1);
+                      }}
+                    >
+                      반납 시간{sortBy === 'returnTime' ? (sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
+                    </th>
                     <th style={{ width: 70 }}>상태</th>
                     <th style={{ width: 100 }}>대여 유형</th>
                     <th style={{ width: 120 }}>상태 변경 사유</th>

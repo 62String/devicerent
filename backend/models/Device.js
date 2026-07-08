@@ -34,6 +34,7 @@ const DeviceSchema = new Schema({
       sourceSheet: { type: String, default: '' },
       sourceStatus: { type: String, default: '' },
       category: { type: String, default: '' },
+      deviceType: { type: String, default: '' },
       manufacturer: { type: String, default: '' },
       modelNumber: { type: String, default: '' },
       chipset: { type: String, default: '' },

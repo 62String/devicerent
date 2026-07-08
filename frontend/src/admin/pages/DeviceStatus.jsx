@@ -22,6 +22,12 @@ const formatRentedAt = (rentedAt) => {
   };
 };
 
+const sortByRentedAt = (list, order = 'desc') => [...list].sort((a, b) => {
+  const aTime = a?.rentedAt ? new Date(a.rentedAt).getTime() : 0;
+  const bTime = b?.rentedAt ? new Date(b.rentedAt).getTime() : 0;
+  return order === 'asc' ? aTime - bTime : bTime - aTime;
+});
+
 const DeviceStatus = () => {
   const { user } = useAuth();
   const [devices, setDevices] = useState([]);
@@ -32,6 +38,7 @@ const DeviceStatus = () => {
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [selectedRemark, setSelectedRemark] = useState('');
   const [selectedSerial, setSelectedSerial] = useState('');
+  const [sortOrder, setSortOrder] = useState('desc');
   const token = localStorage.getItem('token');
   const apiUrl = getApiUrl();
 
@@ -50,7 +57,9 @@ const DeviceStatus = () => {
         axios.get(`${apiUrl}/api/devices/status`, { headers }),
         axios.get(`${apiUrl}/api/devices`, { headers }),
       ]);
-      const rentedDevices = Array.isArray(statusResponse.data) ? statusResponse.data : [];
+      const rentedDevices = Array.isArray(statusResponse.data)
+        ? sortByRentedAt(statusResponse.data, sortOrder)
+        : [];
       const activeDevices = Array.isArray(devicesResponse.data)
         ? devicesResponse.data.filter(device => device && device.status === 'active')
         : [];
@@ -72,14 +81,19 @@ const DeviceStatus = () => {
   const handleSearch = (value) => {
     setSearchSerial(value);
     if (!value.trim()) {
-      setFilteredDevices(devices);
+      setFilteredDevices(sortByRentedAt(devices, sortOrder));
       return;
     }
     const filtered = devices.filter(device =>
       device && device.serialNumber.toLowerCase().includes(value.toLowerCase())
     );
-    setFilteredDevices(filtered);
+    setFilteredDevices(sortByRentedAt(filtered, sortOrder));
   };
+
+  useEffect(() => {
+    setDevices((current) => sortByRentedAt(current, sortOrder));
+    setFilteredDevices((current) => sortByRentedAt(current, sortOrder));
+  }, [sortOrder]);
 
   const openRemarkModal = (device) => {
     setSelectedRemark(device.remark);
@@ -136,6 +150,15 @@ const DeviceStatus = () => {
             />
           </div>
           <button onClick={() => handleSearch('')} className="btn btn-outline">초기화</button>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="input"
+            aria-label="대여일시 정렬"
+          >
+            <option value="desc">대여일 최신순</option>
+            <option value="asc">대여일 오래된순</option>
+          </select>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}

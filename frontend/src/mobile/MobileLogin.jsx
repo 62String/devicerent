@@ -9,6 +9,7 @@ const MobileLogin = () => {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
   const navigate = useNavigate();
   const { setUser, user } = useAuth();
   const apiUrl = getApiUrl();
@@ -18,6 +19,20 @@ const MobileLogin = () => {
       navigate('/mobile/rent');
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    let mounted = true;
+    axios.get(`${apiUrl}/api/auth/microsoft/config`)
+      .then((response) => {
+        if (mounted) setMicrosoftEnabled(Boolean(response.data?.enabled));
+      })
+      .catch(() => {
+        if (mounted) setMicrosoftEnabled(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [apiUrl]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -36,6 +51,10 @@ const MobileLogin = () => {
     } catch (err) {
       setError('로그인에 실패했습니다. 아이디와 비밀번호를 확인해 주세요.');
     }
+  };
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = `${apiUrl}/api/auth/microsoft/start?redirect=/mobile/rent`;
   };
 
   return (
@@ -73,6 +92,19 @@ const MobileLogin = () => {
               />
               <button type="submit" className="btn btn-ink w-full">로그인</button>
             </form>
+            <div className="flex items-center gap-2 my-4">
+              <div className="h-px flex-1 bg-line" />
+              <span className="text-[11px] text-hint">또는</span>
+              <div className="h-px flex-1 bg-line" />
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline w-full"
+              onClick={handleMicrosoftLogin}
+              disabled={!microsoftEnabled}
+            >
+              Microsoft 365 계정으로 로그인
+            </button>
           </div>
         </div>
       </div>

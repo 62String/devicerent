@@ -2,7 +2,19 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../config');
+const {
+  JWT_SECRET,
+  MICROSOFT_AUTH_ENABLED,
+} = require('../config');
+const {
+  createMicrosoftState,
+  verifyMicrosoftState,
+  getMicrosoftAuthorizeUrl,
+  exchangeCodeForTokens,
+  verifyMicrosoftIdToken,
+  fetchMicrosoftProfile,
+  normalizeMicrosoftUser,
+} = require('../utils/microsoftAuth');
 
 router.post('/register', async (req, res) => {
   const { name, affiliation, id, password, passwordConfirm, position } = req.body;
@@ -78,6 +90,89 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.get('/microsoft/config', (req, res) => {
+  res.json({ enabled: MICROSOFT_AUTH_ENABLED });
+});
+
+router.get('/microsoft/start', (req, res) => {
+  if (!MICROSOFT_AUTH_ENABLED) {
+    return res.status(503).json({ message: 'Microsoft 로그인 설정이 아직 완료되지 않았습니다.' });
+  }
+
+  const frontendOrigin = req.get('origin') || `${req.protocol}://${req.get('host')}`.replace(':4000', ':3000');
+  const redirectPath = typeof req.query.redirect === 'string' ? req.query.redirect : '/devices';
+  const state = createMicrosoftState({ frontendOrigin, redirectPath });
+  res.redirect(getMicrosoftAuthorizeUrl({ state }));
+});
+
+router.get('/microsoft/callback', async (req, res) => {
+  if (!MICROSOFT_AUTH_ENABLED) {
+    return res.status(503).send('Microsoft login is not configured');
+  }
+
+  const { code, state, error, error_description: errorDescription } = req.query;
+  let verifiedState;
+
+  try {
+    verifiedState = verifyMicrosoftState(state);
+    if (error) {
+      throw new Error(errorDescription || error);
+    }
+    if (!code) {
+      throw new Error('Authorization code is missing');
+    }
+
+    const tokens = await exchangeCodeForTokens(code);
+    const claims = await verifyMicrosoftIdToken(tokens.id_token);
+    const profile = await fetchMicrosoftProfile(tokens.access_token);
+    const microsoftUser = normalizeMicrosoftUser({ claims, profile });
+
+    let user = await User.findOne({
+      $or: [
+        { microsoftOid: microsoftUser.microsoftOid },
+        { email: microsoftUser.email },
+        { id: microsoftUser.id },
+      ]
+    });
+
+    if (!user) {
+      user = await User.create({
+        id: microsoftUser.id,
+        email: microsoftUser.email,
+        microsoftOid: microsoftUser.microsoftOid,
+        authProvider: 'microsoft',
+        name: microsoftUser.name,
+        affiliation: microsoftUser.affiliation,
+        position: microsoftUser.position,
+        isPending: false,
+        isAdmin: false,
+      });
+    } else {
+      user.authProvider = user.authProvider || 'microsoft';
+      user.microsoftOid = user.microsoftOid || microsoftUser.microsoftOid;
+      user.email = user.email || microsoftUser.email;
+      user.name = microsoftUser.name || user.name;
+      user.affiliation = microsoftUser.affiliation || user.affiliation;
+      await user.save();
+    }
+
+    if (user.isPending) {
+      throw new Error('승인 대기중');
+    }
+
+    const appToken = jwt.sign({ id: user.id, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: user.isAdmin ? '365d' : '1h' });
+    const callbackUrl = new URL('/auth/microsoft/callback', verifiedState.frontendOrigin);
+    callbackUrl.searchParams.set('token', appToken);
+    callbackUrl.searchParams.set('redirect', verifiedState.redirectPath || '/devices');
+    return res.redirect(callbackUrl.toString());
+  } catch (callbackError) {
+    const frontendOrigin = verifiedState?.frontendOrigin || `${req.protocol}://${req.get('host')}`.replace(':4000', ':3000');
+    const callbackUrl = new URL('/auth/microsoft/callback', frontendOrigin);
+    callbackUrl.searchParams.set('error', callbackError.message || 'Microsoft login failed');
+    return res.redirect(callbackUrl.toString());
+  }
+});
+
 router.get('/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
@@ -91,7 +186,9 @@ router.get('/me', async (req, res) => {
       affiliation: user.affiliation,
       position: user.position,
       isPending: user.isPending || false,
-      isAdmin: user.isAdmin || false
+      isAdmin: user.isAdmin || false,
+      authProvider: user.authProvider || 'local',
+      email: user.email || ''
     };
     res.json({ user: returnData });
   } catch (error) {

@@ -4,6 +4,8 @@ import { getApiUrl } from './api';
 
 const AuthContext = createContext();
 
+const PUBLIC_AUTH_PATHS = ['/login', '/register', '/mobile/login', '/auth/microsoft/callback'];
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
@@ -25,7 +27,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    if (!['/login', '/register'].includes(window.location.pathname)) {
+    if (!PUBLIC_AUTH_PATHS.includes(window.location.pathname)) {
       window.location.href = '/login';
     }
   };
@@ -41,7 +43,7 @@ export function AuthProvider({ children }) {
 
         if (!token) {
           console.log('No token found, skipping auth initialization');
-          if (!['/login', '/register'].includes(window.location.pathname)) {
+          if (!PUBLIC_AUTH_PATHS.includes(window.location.pathname)) {
             window.location.href = '/login';
           }
           return;

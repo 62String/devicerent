@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { getApiUrl } from '../../utils/api';
 import { CheckIcon } from '../../components/Icons';
+import DeviceChangeRequests from './DeviceChangeRequests';
 
 const formatElapsed = (hours) => {
   if (hours == null) return '—';
@@ -25,6 +26,8 @@ function LongTermApproval() {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState('');
+  const [activeTab, setActiveTab] = useState('longterm');
+  const [pendingReportCount, setPendingReportCount] = useState(0);
 
   const fetchPending = useCallback(async () => {
     setLoading(true);
@@ -41,9 +44,21 @@ function LongTermApproval() {
     }
   }, [apiUrl, token]);
 
+  const fetchPendingReports = useCallback(async () => {
+    try {
+      const res = await axios.get(`${apiUrl}/api/devices/change-requests?status=pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPendingReportCount((res.data || []).length);
+    } catch (err) {
+      setPendingReportCount(0);
+    }
+  }, [apiUrl, token]);
+
   useEffect(() => {
     fetchPending();
-  }, [fetchPending]);
+    fetchPendingReports();
+  }, [fetchPending, fetchPendingReports]);
 
   const act = async (serialNumber, type) => {
     setBusy(serialNumber);
@@ -67,15 +82,36 @@ function LongTermApproval() {
   return (
     <div className="min-h-screen bg-paper">
       <div className="page-wrap" style={{ maxWidth: 1100 }}>
-        <div className="flex items-center gap-2.5">
-          <h1 className="page-title">장기대여 승인 대기</h1>
-          {pending.length > 0 && <span className="badge badge-danger" style={{ fontSize: 12, padding: '3px 10px' }}>{pending.length}건</span>}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h1 className="page-title">승인 대기</h1>
+          {pending.length > 0 && <span className="badge badge-danger" style={{ fontSize: 12, padding: '3px 10px' }}>장기대여 {pending.length}건</span>}
+          {pendingReportCount > 0 && <span className="badge badge-warn" style={{ fontSize: 12, padding: '3px 10px' }}>디바이스 제보 {pendingReportCount}건</span>}
         </div>
-        <p className="page-sub">팀장 이상이 검토 후 승인합니다 · 미승인 상태로 3일을 넘기면 장기 미반납 목록에도 표시됩니다</p>
+        <p className="page-sub">장기대여 신청과 디바이스 정보 제보를 한곳에서 검토합니다</p>
+
+        <div className="flex gap-2 mt-5 mb-4 flex-wrap">
+          <button
+            type="button"
+            className={`btn ${activeTab === 'longterm' ? 'btn-ink' : 'btn-outline'}`}
+            onClick={() => setActiveTab('longterm')}
+          >
+            장기대여 승인 {pending.length > 0 ? `(${pending.length})` : ''}
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'deviceReport' ? 'btn-ink' : 'btn-outline'}`}
+            onClick={() => setActiveTab('deviceReport')}
+          >
+            디바이스 제보 {pendingReportCount > 0 ? `(${pendingReportCount})` : ''}
+          </button>
+        </div>
 
         {error && <div className="alert alert-error mt-5">{error}</div>}
         {message && <div className={`alert mt-5 ${isErr ? 'alert-error' : 'alert-success'}`}>{message}</div>}
 
+        {activeTab === 'deviceReport' ? (
+          <DeviceChangeRequests embedded onChanged={fetchPendingReports} />
+        ) : (
         <div className="mt-5">
           {loading ? (
             <div className="card p-10 text-center text-sub text-sm">불러오는 중...</div>
@@ -130,9 +166,12 @@ function LongTermApproval() {
             </div>
           )}
         </div>
-        <div className="text-[11px] text-hint mt-2.5">
-          승인하면 정식 장기대여로 전환됩니다. 거절하면 일반대여로 남아, 기한 초과 시 장기 미반납 목록에 표시됩니다.
-        </div>
+        )}
+        {activeTab === 'longterm' && (
+          <div className="text-[11px] text-hint mt-2.5">
+            승인하면 정식 장기대여로 전환됩니다. 거절하면 일반대여로 남아, 기한 초과 시 장기 미반납 목록에 표시됩니다.
+          </div>
+        )}
       </div>
     </div>
   );

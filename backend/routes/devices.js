@@ -5,9 +5,11 @@ const ExportHistory = require('../models/ExportHistory');
 const User = require('../models/User');
 const RentalHistory = require('../models/RentalHistory');
 const DeviceStatusHistory = require('../models/DeviceStatusHistory');
+const DeviceChangeRequest = require('../models/DeviceChangeRequest');
+const DeviceChangeLog = require('../models/DeviceChangeLog');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const { adminAuth, requireRoleLevel } = require('./middleware');
+const { userAuth, adminAuth, requireRoleLevel } = require('./middleware');
 const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
@@ -121,7 +123,9 @@ router.get('/status', async (req, res) => {
 
   try {
     jwt.verify(token, JWT_SECRET);
-    const devices = await Device.find({ rentedBy: { $ne: null } }).lean();
+    const devices = await Device.find({ rentedBy: { $ne: null } })
+      .sort({ rentedAt: -1 })
+      .lean();
     res.json(devices);
   } catch (error) {
     if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
@@ -192,24 +196,66 @@ router.get('/dashboard', adminAuth, async (req, res) => {
     // 경과시간 내림차순 (오래 안 돌려준 순) — null은 뒤로
     rentedDevices.sort((a, b) => (b.elapsedHours ?? -1) - (a.elapsedHours ?? -1));
 
-    const recentActivity = (await RentalHistory.find()
+    const statusChanges = (await DeviceStatusHistory.find()
       .sort({ timestamp: -1 })
       .limit(8)
       .lean())
       .map((record) => ({
-        action: record.action,
+        type: 'status',
         serialNumber: record.serialNumber,
-        userName: record.userDetails?.name || '알 수 없음',
-        affiliation: record.userDetails?.affiliation || '',
+        modelName: record.modelName || 'N/A',
+        osName: record.osName || '',
+        osVersion: record.osVersion || '',
+        status: record.status,
+        statusReason: record.statusReason || '',
+        performedBy: record.performedBy || '알 수 없음',
         timestamp: record.timestamp,
       }));
+
+    const approvedRequests = (await DeviceChangeRequest.find({ status: 'approved' })
+      .sort({ reviewedAt: -1 })
+      .limit(8)
+      .lean())
+      .map((record) => ({
+        type: record.requestType,
+        serialNumber: record.serialNumber,
+        modelName: record.modelName || 'N/A',
+        osName: record.osName || '',
+        osVersion: record.osVersion || '',
+        status: record.requestType === 'repair_needed' ? 'repair' : 'os_change',
+        statusReason: record.reviewNote || record.reason || '',
+        performedBy: record.reviewedBy?.name || '알 수 없음',
+        timestamp: record.reviewedAt || record.updatedAt || record.createdAt,
+      }));
+
+    const directChangeLogs = (await DeviceChangeLog.find()
+      .sort({ timestamp: -1 })
+      .limit(8)
+      .lean())
+      .map((record) => ({
+        type: record.changeType,
+        serialNumber: record.serialNumber || 'SYSTEM',
+        modelName: record.modelName || 'N/A',
+        osName: record.osName || '',
+        osVersion: record.osVersion || '',
+        status: record.changeType,
+        statusReason: record.reason || '',
+        performedBy: record.performedBy || '알 수 없음',
+        timestamp: record.timestamp,
+      }));
+
+    const recentDeviceChanges = [...statusChanges, ...approvedRequests, ...directChangeLogs]
+      .filter((record) => record.timestamp)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 8);
 
     res.json({
       counts,
       osDistribution,
       statusDistribution,
       rentedDevices,
-      recentActivity,
+      recentDeviceChanges,
+      recentActivity: recentDeviceChanges,
       overdueThresholdHours: OVERDUE_HOURS,
     });
   } catch (error) {
@@ -296,6 +342,136 @@ router.post('/longterm/reject', requireRoleLevel(3), async (req, res) => {
     res.json({ message: '장기대여 신청이 거절되어 일반대여로 전환되었습니다.', device });
   } catch (error) {
     console.error('Longterm reject error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ===== 디바이스 정보/상태 제보 승인 워크플로우 =====
+
+router.post('/change-requests', userAuth, async (req, res) => {
+  const { serialNumber, requestType, proposedValue = null, reason = '' } = req.body;
+  if (!serialNumber) return res.status(400).json({ message: 'Serial number is required' });
+  if (!['os_change', 'repair_needed'].includes(requestType)) {
+    return res.status(400).json({ message: 'Invalid request type' });
+  }
+
+  try {
+    const device = await Device.findOne({ serialNumber }).lean();
+    if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    const existingPendingRequest = await DeviceChangeRequest.findOne({ serialNumber, status: 'pending' }).lean();
+    if (existingPendingRequest) {
+      return res.status(409).json({ message: '이미 승인 대기 중인 디바이스 제보가 있습니다.' });
+    }
+
+    const currentValue = requestType === 'os_change'
+      ? { osName: device.osName || '', osVersion: device.osVersion || '' }
+      : { status: device.status || 'active', statusReason: device.statusReason || '' };
+
+    const normalizedProposedValue = requestType === 'os_change'
+      ? {
+          osName: String(proposedValue?.osName || device.osName || '').trim(),
+          osVersion: String(proposedValue?.osVersion || '').trim()
+        }
+      : {
+          status: 'repair',
+          statusReason: String(proposedValue?.statusReason || reason || '').trim()
+        };
+
+    const request = await DeviceChangeRequest.create({
+      serialNumber: device.serialNumber,
+      modelName: device.modelName || device.deviceInfo || 'N/A',
+      osName: device.osName || '',
+      osVersion: device.osVersion || '',
+      requestType,
+      currentValue,
+      proposedValue: normalizedProposedValue,
+      reason: String(reason || '').trim(),
+      submittedBy: {
+        id: req.user.id,
+        name: req.user.name,
+        affiliation: req.user.affiliation || ''
+      }
+    });
+
+    res.status(201).json({ message: '제보가 승인 대기 목록에 등록되었습니다.', request });
+  } catch (error) {
+    console.error('Create device change request error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.get('/change-requests', adminAuth, async (req, res) => {
+  const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : null;
+  try {
+    const query = status ? { status } : {};
+    const requests = await DeviceChangeRequest.find(query).sort({ createdAt: -1 }).lean();
+    res.json(requests);
+  } catch (error) {
+    console.error('Fetch device change requests error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.post('/change-requests/:id/approve', adminAuth, async (req, res) => {
+  const { reviewNote = '' } = req.body;
+  try {
+    const request = await DeviceChangeRequest.findOne({ _id: req.params.id, status: 'pending' });
+    if (!request) return res.status(404).json({ message: '승인 대기 중인 제보를 찾을 수 없습니다.' });
+
+    const device = await Device.findOne({ serialNumber: request.serialNumber });
+    if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    if (request.requestType === 'os_change') {
+      device.osName = String(request.proposedValue?.osName || device.osName || '').trim();
+      device.osVersion = String(request.proposedValue?.osVersion || '').trim();
+    } else if (request.requestType === 'repair_needed') {
+      device.status = 'repair';
+      device.statusReason = String(request.proposedValue?.statusReason || request.reason || '').trim();
+    }
+
+    await device.save();
+
+    if (request.requestType === 'repair_needed') {
+      await DeviceStatusHistory.create({
+        serialNumber: device.serialNumber,
+        modelName: device.modelName || device.deviceInfo || 'N/A',
+        osName: device.osName || '',
+        osVersion: device.osVersion || '',
+        status: 'repair',
+        statusReason: device.statusReason || '',
+        performedBy: req.user.name || 'Unknown'
+      });
+    }
+
+    request.status = 'approved';
+    request.reviewedBy = { id: req.user.id, name: req.user.name };
+    request.reviewedAt = new Date();
+    request.reviewNote = String(reviewNote || '').trim();
+    await request.save();
+
+    res.json({ message: '제보가 승인되어 디바이스 정보에 반영되었습니다.', request, device });
+  } catch (error) {
+    console.error('Approve device change request error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.post('/change-requests/:id/reject', adminAuth, async (req, res) => {
+  const { reviewNote = '' } = req.body;
+  try {
+    const request = await DeviceChangeRequest.findOne({ _id: req.params.id, status: 'pending' });
+    if (!request) return res.status(404).json({ message: '승인 대기 중인 제보를 찾을 수 없습니다.' });
+
+    request.status = 'rejected';
+    request.reviewedBy = { id: req.user.id, name: req.user.name };
+    request.reviewedAt = new Date();
+    request.reviewNote = String(reviewNote || '').trim();
+    await request.save();
+
+    res.json({ message: '제보가 반려되었습니다.', request });
+  } catch (error) {
+    console.error('Reject device change request error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -642,13 +818,16 @@ router.post('/manage/update-details', adminAuth, async (req, res) => {
   if (!serialNumber) return res.status(400).json({ message: 'Serial number is required' });
 
   const detailKeys = [
-    'sourceSheet', 'sourceStatus', 'category', 'manufacturer', 'modelNumber',
+    'sourceSheet', 'sourceStatus', 'category', 'deviceType', 'manufacturer', 'modelNumber',
     'chipset', 'cpu', 'gpu', 'memory', 'bluetooth', 'screenSize', 'resolution',
     'registeredAt', 'checkedAt', 'note', 'udid'
   ];
   const sanitizedDetails = Object.fromEntries(detailKeys.map((key) => [key, String(details[key] || '').trim()]));
 
   try {
+    const beforeDevice = await Device.findOne({ serialNumber }).lean();
+    if (!beforeDevice) return res.status(404).json({ message: 'Device not found' });
+
     const device = await Device.findOneAndUpdate(
       { serialNumber },
       {
@@ -663,6 +842,37 @@ router.post('/manage/update-details', adminAuth, async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    const beforeValue = {
+      deviceInfo: beforeDevice.deviceInfo || '',
+      modelName: beforeDevice.modelName || '',
+      osName: beforeDevice.osName || '',
+      osVersion: beforeDevice.osVersion || '',
+      details: beforeDevice.details || {}
+    };
+    const afterValue = {
+      deviceInfo: device.deviceInfo || '',
+      modelName: device.modelName || '',
+      osName: device.osName || '',
+      osVersion: device.osVersion || '',
+      details: device.details || {}
+    };
+
+    if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+      await DeviceChangeLog.create({
+        serialNumber: device.serialNumber,
+        modelName: device.modelName || device.deviceInfo || 'N/A',
+        osName: device.osName || '',
+        osVersion: device.osVersion || '',
+        changeType: 'details_update',
+        changeLabel: '상세정보 수정',
+        beforeValue,
+        afterValue,
+        reason: '관리자 직접 수정',
+        performedBy: req.user?.name || '알 수 없음'
+      });
+    }
+
     res.json({ message: 'Device details updated successfully', device });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -725,7 +935,23 @@ router.get('/', async (req, res) => {
     if (!devices || devices.length === 0) {
       return res.status(404).json({ message: "No devices found" });
     }
-    res.json(devices);
+    const pendingRequests = await DeviceChangeRequest.find({ status: 'pending' })
+      .select('serialNumber requestType reason createdAt')
+      .lean();
+    const pendingBySerial = pendingRequests.reduce((acc, request) => {
+      if (!acc[request.serialNumber]) acc[request.serialNumber] = [];
+      acc[request.serialNumber].push({
+        requestType: request.requestType,
+        reason: request.reason || '',
+        createdAt: request.createdAt
+      });
+      return acc;
+    }, {});
+    res.json(devices.map(device => ({
+      ...device,
+      pendingChangeRequests: pendingBySerial[device.serialNumber] || [],
+      hasPendingChangeRequest: Boolean(pendingBySerial[device.serialNumber]?.length)
+    })));
   } catch (error) {
     if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
       return res.status(401).json({ message: "Invalid token" });
@@ -741,7 +967,12 @@ router.get('/available', async (req, res) => {
 
   try {
     jwt.verify(token, JWT_SECRET);
-    const devices = await Device.find({ status: 'active', rentedBy: null }).lean();
+    const pendingSerials = await DeviceChangeRequest.distinct('serialNumber', { status: 'pending' });
+    const devices = await Device.find({
+      status: 'active',
+      rentedBy: null,
+      serialNumber: { $nin: pendingSerials }
+    }).lean();
     if (!devices || devices.length === 0) {
       return res.status(404).json({ message: "No available devices found" });
     }
@@ -774,6 +1005,11 @@ router.post('/rent-device', async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     if (!user.name || !user.affiliation || user.name.trim() === '' || user.affiliation.trim() === '') {
       return res.status(400).json({ message: "User name or affiliation is incomplete" });
+    }
+
+    const pendingChangeRequest = await DeviceChangeRequest.findOne({ serialNumber: deviceId, status: 'pending' }).lean();
+    if (pendingChangeRequest) {
+      return res.status(409).json({ message: "승인 대기 중인 디바이스 제보가 있어 대여할 수 없습니다." });
     }
 
     // 장기대여는 승인 대기(pending)로 신청 — 기기는 나가되 팀장 이상 승인 전까지 미승인 상태.
@@ -931,9 +1167,69 @@ router.get('/status-history', async (req, res) => {
 
   try {
     jwt.verify(token, JWT_SECRET);
-    const history = await DeviceStatusHistory.find()
+    const statusHistory = (await DeviceStatusHistory.find()
       .sort({ timestamp: -1 })
-      .lean();
+      .lean())
+      .map((record) => ({
+        ...record,
+        changeType: 'status',
+        changeLabel: '상태 변경',
+        beforeValue: '',
+        afterValue: record.status,
+        reason: record.statusReason || '',
+        performedBy: record.performedBy || '알 수 없음',
+        timestamp: record.timestamp,
+      }));
+
+    const requestHistory = (await DeviceChangeRequest.find({ status: 'approved' })
+      .sort({ reviewedAt: -1 })
+      .lean())
+      .map((record) => ({
+        _id: record._id,
+        serialNumber: record.serialNumber,
+        modelName: record.modelName || 'N/A',
+        osName: record.osName || '',
+        osVersion: record.osVersion || '',
+        status: record.requestType === 'repair_needed' ? 'repair' : 'os_change',
+        statusReason: record.reviewNote || record.reason || '',
+        changeType: record.requestType,
+        changeLabel: record.requestType === 'os_change' ? 'OS 변경 승인' : '수리 필요 승인',
+        beforeValue: record.requestType === 'os_change'
+          ? `${record.currentValue?.osName || ''} ${record.currentValue?.osVersion || ''}`.trim()
+          : record.currentValue?.status || '',
+        afterValue: record.requestType === 'os_change'
+          ? `${record.proposedValue?.osName || ''} ${record.proposedValue?.osVersion || ''}`.trim()
+          : 'repair',
+        reason: record.reviewNote || record.reason || '',
+        performedBy: record.reviewedBy?.name || '알 수 없음',
+        submittedBy: record.submittedBy?.name || '',
+        timestamp: record.reviewedAt || record.updatedAt || record.createdAt,
+      }));
+
+    const directLogHistory = (await DeviceChangeLog.find()
+      .sort({ timestamp: -1 })
+      .lean())
+      .map((record) => ({
+        _id: record._id,
+        serialNumber: record.serialNumber || 'SYSTEM',
+        modelName: record.modelName || 'N/A',
+        osName: record.osName || '',
+        osVersion: record.osVersion || '',
+        status: record.changeType,
+        statusReason: record.reason || '',
+        changeType: record.changeType,
+        changeLabel: record.changeLabel,
+        beforeValue: record.beforeValue,
+        afterValue: record.afterValue,
+        reason: record.reason || '',
+        performedBy: record.performedBy || '알 수 없음',
+        timestamp: record.timestamp,
+      }));
+
+    const history = [...statusHistory, ...requestHistory, ...directLogHistory]
+      .filter((record) => record.timestamp)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
     res.json(history);
   } catch (error) {
     console.error('Error fetching status history:', error);

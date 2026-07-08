@@ -10,6 +10,7 @@ function Login() {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
   const [theme, setTheme] = useState(getTheme());
   const navigate = useNavigate();
   const { setUser } = useAuth();
@@ -21,6 +22,20 @@ function Login() {
       return () => clearTimeout(timer);
     }
   }, [error]);
+
+  useEffect(() => {
+    let mounted = true;
+    axios.get(`${apiUrl}/api/auth/microsoft/config`)
+      .then((response) => {
+        if (mounted) setMicrosoftEnabled(Boolean(response.data?.enabled));
+      })
+      .catch(() => {
+        if (mounted) setMicrosoftEnabled(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [apiUrl]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -39,6 +54,10 @@ function Login() {
     } catch (error) {
       setError(error.response?.data?.message || '로그인에 실패했습니다.');
     }
+  };
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = `${apiUrl}/api/auth/microsoft/start?redirect=/devices`;
   };
 
   return (
@@ -87,6 +106,25 @@ function Login() {
                 />
                 <button type="submit" className="btn btn-ink w-full">로그인</button>
               </form>
+              <div className="flex items-center gap-2 my-4">
+                <div className="h-px flex-1 bg-line" />
+                <span className="text-[11px] text-hint">또는</span>
+                <div className="h-px flex-1 bg-line" />
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline w-full"
+                onClick={handleMicrosoftLogin}
+                disabled={!microsoftEnabled}
+                title={microsoftEnabled ? 'Microsoft 365 계정으로 로그인' : 'Microsoft Entra ID 설정 후 활성화됩니다'}
+              >
+                Microsoft 365 계정으로 로그인
+              </button>
+              {!microsoftEnabled && (
+                <p className="text-[11px] text-hint mt-2">
+                  Entra ID 앱 등록 정보가 설정되면 활성화됩니다.
+                </p>
+              )}
             </div>
           </div>
           <p className="text-center text-xs text-sub mt-4">

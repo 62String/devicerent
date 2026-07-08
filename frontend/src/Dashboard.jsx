@@ -20,12 +20,12 @@ const formatOs = (osName, osVersion) => {
   return `${osName} ${osVersion}`;
 };
 
-const formatTime = (ts) => {
+const formatDate = (ts) => {
   if (!ts) return '';
   const d = new Date(ts);
   if (isNaN(d.getTime())) return '';
   const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
 function Dashboard() {
@@ -72,13 +72,21 @@ function Dashboard() {
     );
   }
 
-  const { counts, osDistribution, statusDistribution, rentedDevices = [], recentActivity = [] } = data;
+  const { counts, osDistribution, statusDistribution, rentedDevices = [], recentDeviceChanges = [] } = data;
   const overdueList = rentedDevices.filter(d => d.overdue);
   const approvedList = rentedDevices.filter(d => d.rentalType === 'longterm' && d.longTermStatus === 'approved');
   const totalOs = Object.values(osDistribution).reduce((a, b) => a + b, 0) || 1;
   const teamLead = isTeamLeadOrAbove(user);
 
-  const STATUS_LABEL = { active: '활성', repair: '수리중', inactive: '비활성' };
+  const STATUS_LABEL = {
+    active: '활성',
+    repair: '수리 필요',
+    inactive: '비활성',
+    os_change: 'OS 변경',
+    details_update: '상세정보 수정',
+    excel_import: '엑셀 반영',
+  };
+  const STATUS_BADGE_CLASS = { active: 'badge-ok', repair: 'badge-warn', inactive: 'badge-neutral' };
 
   return (
     <div className="min-h-screen bg-paper">
@@ -173,23 +181,32 @@ function Dashboard() {
                 ))}
                 <div className="flex gap-1.5 text-[11px] mt-3">
                   {['active', 'repair', 'inactive'].map(s => (
-                    <span key={s} className={`flex-1 text-center badge ${s === 'active' ? 'badge-ok' : s === 'repair' ? 'badge-warn' : 'badge-neutral'}`} style={{ padding: '5px 0' }}>
+                    <button
+                      key={s}
+                      type="button"
+                      className={`flex-1 text-center badge ${STATUS_BADGE_CLASS[s]}`}
+                      style={{ padding: '5px 0', cursor: 'pointer' }}
+                      title={`${STATUS_LABEL[s]} 디바이스 관리 목록 보기`}
+                      onClick={() => navigate(`/devices/manage?status=${s}`)}
+                    >
                       <b>{statusDistribution[s] || 0}</b> {STATUS_LABEL[s]}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
             </div>
             <div className="card">
-              <div className="text-sm font-bold text-ink" style={{ padding: '11px 14px', borderBottom: '2px solid var(--ink)' }}>최근 활동</div>
+              <div className="text-sm font-bold text-ink" style={{ padding: '11px 14px', borderBottom: '2px solid var(--ink)' }}>최근 디바이스 변경 이력</div>
               <div className="px-3.5 py-1.5">
-                {recentActivity.length === 0 ? (
-                  <div className="text-sub text-[12px] py-3">최근 활동이 없습니다.</div>
-                ) : recentActivity.slice(0, 6).map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 py-1.5" style={{ borderBottom: i < Math.min(recentActivity.length, 6) - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: a.action === 'return' ? 'var(--ok)' : 'var(--warn)' }} />
-                    <span className="flex-1 text-[11.5px] text-ink">{a.action === 'return' ? '반납' : '대여'} <span className="td-mono">{a.serialNumber}</span> · {a.userName}</span>
-                    <span className="text-[11px] text-hint">{formatTime(a.timestamp)}</span>
+                {recentDeviceChanges.length === 0 ? (
+                  <div className="text-sub text-[12px] py-3">최근 디바이스 변경 이력이 없습니다.</div>
+                ) : recentDeviceChanges.slice(0, 6).map((change, i) => (
+                  <div key={`${change.serialNumber}-${change.timestamp}-${i}`} className="flex items-center gap-2 py-1.5" style={{ borderBottom: i < Math.min(recentDeviceChanges.length, 6) - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: change.status === 'active' ? 'var(--ok)' : change.status === 'repair' ? 'var(--warn)' : 'var(--hint)' }} />
+                    <span className="flex-1 text-[11.5px] text-ink truncate" title={change.statusReason || ''}>
+                      <span className="td-mono">{change.serialNumber}</span> · {STATUS_LABEL[change.status] || change.status} · {change.performedBy}
+                    </span>
+                    <span className="text-[11px] text-hint">{formatDate(change.timestamp)}</span>
                   </div>
                 ))}
               </div>

@@ -25,6 +25,12 @@
   --danger-bg: #FCEBEB;
   --danger-text: #791F1F;
   --row-alt: #FBFCFD;
+  --unavailable-bg: #F1F3F5;
+  --unavailable-hover: #E9ECEF;
+  --unavailable-text: #9CA3AF;
+  --unavailable-strong: #6B7280;
+  --repair-row-bg: #FFF4EA;
+  --repair-row-hover: #FDE9D6;
 }
 
 .dark {
@@ -49,6 +55,12 @@
   --danger-bg: #3A1717;
   --danger-text: #F09595;
   --row-alt: #161C25;
+  --unavailable-bg: #202733;
+  --unavailable-hover: #252D3A;
+  --unavailable-text: #6B7280;
+  --unavailable-strong: #8B96A5;
+  --repair-row-bg: #2A2119;
+  --repair-row-hover: #33271D;
 }
 
 /* Tailwind 유틸리티에 토큰 연결 (bg-paper, text-ink, border-line ...) */
@@ -166,6 +178,8 @@
   .badge-warn { background: var(--warn-bg); color: var(--warn-text); }
   .badge-danger { background: var(--danger-bg); color: var(--danger-text); }
   .badge-neutral { background: var(--line-soft); color: var(--sub); }
+  .badge-unavailable { background: var(--unavailable-bg); color: var(--unavailable-strong); border: 1px solid var(--line); }
+  .badge-repair { background: var(--warn-bg); color: var(--warn-text); border: 1px solid rgba(217, 107, 31, 0.22); }
 
   /* 테이블 (노트 스타일: 헤더 아래 잉크 라인) */
   .table-note { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -181,6 +195,24 @@
   .table-note tbody tr { border-bottom: 1px solid var(--line-soft); }
   .table-note tbody tr:last-child { border-bottom: none; }
   .table-note tbody tr:hover { background: var(--row-alt); }
+  .table-note tbody tr.device-row-unavailable { background: var(--unavailable-bg); }
+  .table-note tbody tr.device-row-unavailable:hover { background: var(--unavailable-hover); }
+  .table-note tbody tr.device-row-repair { background: var(--repair-row-bg); }
+  .table-note tbody tr.device-row-repair:hover { background: var(--repair-row-hover); }
+  .table-note tbody tr.device-row-unavailable td,
+  .table-note tbody tr.device-row-unavailable .cell-main,
+  .table-note tbody tr.device-row-unavailable .td-sub,
+  .table-note tbody tr.device-row-unavailable .td-mono {
+    color: var(--unavailable-text);
+  }
+  .table-note tbody tr.device-row-unavailable .cell-sub,
+  .table-note tbody tr.device-row-unavailable .td-hint {
+    color: var(--hint);
+  }
+  .table-note tbody tr.device-row-unavailable .remark-preview {
+    color: var(--unavailable-text);
+    border-bottom-color: var(--unavailable-text);
+  }
   .table-note td { padding: 9px 10px; color: var(--ink); vertical-align: middle; }
   .td-sub { color: var(--sub); }
   .td-hint { color: var(--hint); }

@@ -4,6 +4,7 @@ import { XIcon } from './Icons';
 export const DEVICE_DETAIL_FIELDS = [
   ['기기 상태', 'sourceStatus'],
   ['구분', 'category'],
+  ['기기 유형', 'deviceType'],
   ['제조사', 'manufacturer'],
   ['모델 번호', 'modelNumber'],
   ['칩셋', 'chipset'],
@@ -21,7 +22,7 @@ export const DEVICE_DETAIL_FIELDS = [
 
 const WIDE_FIELDS = new Set(['chipset', 'cpu', 'gpu', 'udid', 'note']);
 
-const DeviceDetailsModal = ({ device, canEdit = false, saving = false, onClose, onSave }) => {
+const DeviceDetailsModal = ({ device, canEdit = false, saving = false, onClose, onSave, onReport }) => {
   const [draft, setDraft] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -103,6 +104,11 @@ const DeviceDetailsModal = ({ device, canEdit = false, saving = false, onClose, 
             {canEdit && (
               <button className="btn btn-outline btn-sm" onClick={() => isEditing ? cancelEditing() : setIsEditing(true)}>
                 {isEditing ? '편집 취소' : '수정'}
+              </button>
+            )}
+            {!canEdit && onReport && (
+              <button className="btn btn-outline btn-sm" onClick={() => onReport(device)}>
+                정보 제보
               </button>
             )}
             <button className="icon-btn" aria-label="닫기" onClick={onClose}><XIcon size={14} /></button>

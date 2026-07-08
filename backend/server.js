@@ -9,6 +9,7 @@ const { verifyToken } = require('./utils/auth');
 const { adminAuth } = require('./routes/middleware');
 const RentalHistory = require('./models/RentalHistory');
 const ExportHistory = require('./models/ExportHistory');
+const DeviceChangeLog = require('./models/DeviceChangeLog');
 const Device = require('./models/Device');
 const User = require('./models/User');
 const fs = require('fs');
@@ -451,6 +452,20 @@ app.post('/api/admin/upload-devices', adminAuth, excelUpload.single('excelFile')
     if (!req.file) return res.status(400).json({ message: '엑셀 파일을 선택해주세요.' });
     const force = req.body.force === 'true';
     const result = await initDevices(force, req.file.path);
+    await DeviceChangeLog.create({
+      serialNumber: 'SYSTEM',
+      modelName: '엑셀 임포트',
+      changeType: 'excel_import',
+      changeLabel: force ? '엑셀 강제 초기화' : '엑셀 초기화',
+      beforeValue: null,
+      afterValue: {
+        fileName: req.file.originalname,
+        processedCount: Array.isArray(result) ? result.length : undefined,
+        force
+      },
+      reason: `${req.file.originalname} 기준 디바이스 목록 ${force ? '강제 초기화' : '업데이트'}`,
+      performedBy: req.user?.name || '알 수 없음'
+    });
     res.json({
       message: '디바이스 엑셀 임포트가 완료되었습니다.',
       fileName: req.file.originalname,
@@ -698,6 +713,8 @@ app.get('/api/me', async (req, res) => {
         position: user.position,
         isPending: user.isPending || false,
         isAdmin: user.isAdmin || false,
+        authProvider: user.authProvider || 'local',
+        email: user.email || '',
       },
     });
   } catch (err) {

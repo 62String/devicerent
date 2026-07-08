@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import { getApiUrl } from '../../utils/api';
 import { SearchIcon, XIcon, DownloadIcon, RefreshIcon, ClockIcon } from '../../components/Icons';
@@ -7,9 +8,38 @@ import DeviceDetailsModal from '../../components/DeviceDetailsModal';
 
 const STATUS_BADGE = {
   active: { label: '활성', className: 'badge badge-ok' },
-  repair: { label: '수리중', className: 'badge badge-warn' },
+  repair: { label: '수리 필요', className: 'badge badge-warn' },
   inactive: { label: '비활성', className: 'badge badge-neutral' },
+  os_change: { label: 'OS 변경', className: 'badge badge-neutral' },
+  details_update: { label: '상세정보 수정', className: 'badge badge-neutral' },
+  excel_import: { label: '엑셀 반영', className: 'badge badge-neutral' },
 };
+
+const formatChangeValue = (history) => {
+  if (history.changeType === 'os_change') {
+    const before = history.beforeValue || 'N/A';
+    const after = history.afterValue || 'N/A';
+    return `${before} → ${after}`;
+  }
+  if (history.changeType === 'details_update') {
+    return '상세정보 변경';
+  }
+  if (history.changeType === 'excel_import') {
+    return `${history.afterValue?.fileName || '엑셀 파일'} · ${history.afterValue?.processedCount ?? '-'}건`;
+  }
+  return history.afterValue || history.status || '—';
+};
+
+const STATUS_FILTERS = [
+  { value: 'all', label: '전체' },
+  { value: 'active', label: '활성' },
+  { value: 'repair', label: '수리 필요' },
+  { value: 'inactive', label: '비활성' },
+];
+
+const normalizeStatusFilter = (status) => (
+  ['active', 'repair', 'inactive'].includes(status) ? status : 'all'
+);
 
 const formatOs = (osName, osVersion) => {
   if (!osName && !osVersion) return 'N/A';
@@ -18,8 +48,21 @@ const formatOs = (osName, osVersion) => {
   return `${osName} ${osVersion}`;
 };
 
+const getDeviceType = (device) => {
+  const savedType = device?.details?.deviceType || '';
+  if (savedType) return savedType;
+  const text = [
+    device?.details?.category,
+    device?.details?.modelNumber,
+    device?.modelName,
+    device?.deviceInfo,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return /(ipad|tablet|tab|pad|패드|태블릿)/i.test(text) ? '패드' : '모바일';
+};
+
 const DeviceManage = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [devices, setDevices] = useState([]);
   const [newDevice, setNewDevice] = useState({ serialNumber: '', deviceInfo: '', osName: '', osVersion: '', modelName: '' });
   const [message, setMessage] = useState('');
@@ -41,6 +84,7 @@ const DeviceManage = () => {
   const [forceInit, setForceInit] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => normalizeStatusFilter(searchParams.get('status')));
   const [sortField, setSortField] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showStatusHistory, setShowStatusHistory] = useState(false);
@@ -54,6 +98,11 @@ const DeviceManage = () => {
   useEffect(() => {
     fetchDevices();
   }, []);
+
+  useEffect(() => {
+    setStatusFilter(normalizeStatusFilter(searchParams.get('status')));
+    setCurrentPage(1);
+  }, [searchParams]);
 
   const fetchDevices = async () => {
     try {
@@ -80,7 +129,7 @@ const DeviceManage = () => {
       setStatusHistory(response.data);
       setShowStatusHistory(true);
     } catch (err) {
-      setMessage('상태 변경 이력 조회 실패');
+      setMessage('디바이스 변경 이력 조회 실패');
       setTimeout(() => setMessage(''), 3000);
     }
   };
@@ -91,22 +140,35 @@ const DeviceManage = () => {
     setHistoryCurrentPage(1);
   };
 
-  const filteredDevices = devices.filter(device =>
-    device.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    device.modelName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    device.osName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const statusCounts = devices.reduce((acc, device) => {
+    const status = device.status || 'active';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, { active: 0, repair: 0, inactive: 0 });
+
+  const filteredDevices = devices.filter(device => {
+    const q = searchTerm.toLowerCase();
+    const matchesText =
+      device.serialNumber.toLowerCase().includes(q) ||
+      device.modelName?.toLowerCase().includes(q) ||
+      device.osName?.toLowerCase().includes(q) ||
+      getDeviceType(device).toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || (device.status || 'active') === statusFilter;
+    return matchesText && matchesStatus;
+  });
 
   const filteredStatusHistory = statusHistory.filter(history =>
     history.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (history.modelName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (history.osName || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (history.osName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (history.changeLabel || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (history.reason || history.statusReason || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const sortedDevices = [...filteredDevices].sort((a, b) => {
     if (!sortField) return 0;
-    const aValue = a[sortField];
-    const bValue = b[sortField];
+    const aValue = sortField === 'deviceType' ? getDeviceType(a) : a[sortField];
+    const bValue = sortField === 'deviceType' ? getDeviceType(b) : b[sortField];
     if (aValue == null) return sortOrder === 'asc' ? 1 : -1;
     if (bValue == null) return sortOrder === 'asc' ? -1 : 1;
     return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
@@ -129,6 +191,16 @@ const DeviceManage = () => {
 
   const sortIndicator = (field) =>
     sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const applyStatusFilter = (nextStatus) => {
+    const normalized = normalizeStatusFilter(nextStatus);
+    setStatusFilter(normalized);
+    setCurrentPage(1);
+    const nextParams = new URLSearchParams(searchParams);
+    if (normalized === 'all') nextParams.delete('status');
+    else nextParams.set('status', normalized);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -417,7 +489,7 @@ const DeviceManage = () => {
             </button>
             <button onClick={showStatusHistory ? hideStatusHistory : fetchStatusHistory} className="btn btn-outline">
               <ClockIcon size={14} />
-              {showStatusHistory ? '기기 목록 보기' : '상태 변경 이력'}
+              {showStatusHistory ? '기기 목록 보기' : '변경 이력'}
             </button>
           </div>
         </div>
@@ -489,7 +561,7 @@ const DeviceManage = () => {
           </div>
         </form>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap items-center">
           <div className="relative flex-1 max-w-[320px]">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-hint pointer-events-none">
               <SearchIcon size={14} />
@@ -506,6 +578,22 @@ const DeviceManage = () => {
               className="input w-full pl-9"
             />
           </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {STATUS_FILTERS.map((filter) => {
+              const count = filter.value === 'all' ? devices.length : statusCounts[filter.value] || 0;
+              const active = statusFilter === filter.value;
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => applyStatusFilter(filter.value)}
+                  className={`btn btn-sm ${active ? 'btn-ink' : 'btn-outline'}`}
+                >
+                  {filter.label} {count}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {!error && (
@@ -517,8 +605,9 @@ const DeviceManage = () => {
                     <tr>
                       <th style={{ width: 92 }}>시리얼</th>
                       <th style={{ width: 170 }}>디바이스 / OS</th>
-                      <th style={{ width: 76 }}>상태</th>
-                      <th>상태 변경 사유</th>
+                      <th style={{ width: 96 }}>변경 유형</th>
+                      <th style={{ width: 140 }}>변경값</th>
+                      <th>사유 / 메모</th>
                       <th style={{ width: 96 }}>변경자</th>
                       <th style={{ width: 150 }}>변경 시간</th>
                     </tr>
@@ -538,12 +627,17 @@ const DeviceManage = () => {
                               </td>
                               <td>
                                 {badge
-                                  ? <span className={badge.className}>{badge.label}</span>
-                                  : <span className="td-hint">{history.status || '—'}</span>}
+                                  ? <span className={badge.className}>{history.changeLabel || badge.label}</span>
+                                  : <span className="td-hint">{history.changeLabel || history.status || '—'}</span>}
                               </td>
                               <td className="td-sub">
-                                <div className="truncate" title={history.statusReason || ''}>
-                                  {history.statusReason || <span className="td-hint">—</span>}
+                                <div className="truncate" title={formatChangeValue(history)}>
+                                  {formatChangeValue(history)}
+                                </div>
+                              </td>
+                              <td className="td-sub">
+                                <div className="truncate" title={history.reason || history.statusReason || ''}>
+                                  {history.reason || history.statusReason || <span className="td-hint">—</span>}
                                 </div>
                               </td>
                               <td className="td-sub">{history.performedBy || '알 수 없음'}</td>
@@ -553,7 +647,7 @@ const DeviceManage = () => {
                         })
                     ) : (
                       <tr>
-                        <td colSpan="6" className="text-center text-sub py-8">상태 변경 이력이 없습니다.</td>
+                        <td colSpan="7" className="text-center text-sub py-8">디바이스 변경 이력이 없습니다.</td>
                       </tr>
                     )}
                   </tbody>
@@ -565,7 +659,7 @@ const DeviceManage = () => {
             devices.length > 0 ? (
               <>
                 <div className="card overflow-x-auto">
-                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 1000 }}>
+                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 1040 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 92 }} className="cursor-pointer select-none" onClick={() => handleSort('serialNumber')}>
@@ -573,6 +667,9 @@ const DeviceManage = () => {
                         </th>
                         <th style={{ width: 170 }} className="cursor-pointer select-none" onClick={() => handleSort('modelName')}>
                           디바이스 / OS{sortIndicator('modelName')}
+                        </th>
+                        <th style={{ width: 70 }} className="cursor-pointer select-none" onClick={() => handleSort('deviceType')}>
+                          유형{sortIndicator('deviceType')}
                         </th>
                         <th style={{ width: 110 }}>대여자</th>
                         <th style={{ width: 100 }}>대여일시</th>
@@ -591,6 +688,7 @@ const DeviceManage = () => {
                               <div className="cell-main truncate" title={device.modelName || 'N/A'}>{device.modelName || 'N/A'}</div>
                               <div className="cell-sub">{formatOs(device.osName, device.osVersion)}</div>
                             </td>
+                            <td className="td-sub">{getDeviceType(device)}</td>
                             <td>
                               {device.rentedBy ? (
                                 <>
@@ -696,7 +794,7 @@ const DeviceManage = () => {
                   className="input w-full mb-3"
                 >
                   <option value="active">활성화</option>
-                  <option value="repair">수리중</option>
+                  <option value="repair">수리 필요</option>
                   <option value="inactive">비활성화</option>
                 </select>
                 <label className="field-label">사유</label>

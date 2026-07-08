@@ -19,6 +19,12 @@ const mapInventoryStatus = (sourceStatus) => {
 const inferOsName = (serialNumber) =>
   /^GD_i_/i.test(serialNumber) ? 'iOS' : 'Android';
 
+const inferDeviceType = (...values) => {
+  const text = values.map(cleanValue).join(' ').toLowerCase();
+  if (/(ipad|tablet|tab|pad|패드|태블릿)/i.test(text)) return '패드';
+  return '모바일';
+};
+
 const findHeaderRow = (rows) => rows.findIndex((row) =>
   row.some((value) => cleanValue(value) === '식별번호')
 );
@@ -51,6 +57,7 @@ const parsePreferredSheet = (xlsx, workbook, sheetName) => {
         sourceSheet: sheetName,
         sourceStatus,
         category: values['구분'],
+        deviceType: inferDeviceType(values['구분'], deviceName, values['모델명']),
         manufacturer: values['제조사'],
         modelNumber: values['모델명'],
         chipset: values['Chipset'],
@@ -88,6 +95,7 @@ const parseLegacySheet = (xlsx, workbook, sheetName, osName) => {
         sourceSheet: sheetName,
         sourceStatus: '',
         category: '',
+        deviceType: inferDeviceType(deviceName, cleanValue(row[3])),
         manufacturer: '',
         modelNumber: '',
         chipset: cleanValue(row[3]),
@@ -127,4 +135,4 @@ const parseDeviceWorkbook = (xlsx, workbook) => {
   };
 };
 
-module.exports = { parseDeviceWorkbook, mapInventoryStatus, inferOsName };
+module.exports = { parseDeviceWorkbook, mapInventoryStatus, inferOsName, inferDeviceType };

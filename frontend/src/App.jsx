@@ -4,12 +4,14 @@ import AdminPage from './admin/pages/AdminPage';
 import UsersPage from './admin/pages/UsersPage';
 import PendingUsersPage from './admin/pages/PendingUsersPage';
 import DeviceManage from './admin/pages/DeviceManage';
+import DeviceChangeRequests from './admin/pages/DeviceChangeRequests';
 import DeviceHistory from './admin/pages/DeviceHistory';
 import Devices from './Devices';
 import Dashboard from './Dashboard';
 import LongTermApproval from './admin/pages/LongTermApproval';
 import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
+import MicrosoftCallback from './MicrosoftCallback';
 import MobileLogin from './mobile/MobileLogin';
 import Register from './Register';
 import ExportHistory from './admin/pages/ExportHistory';
@@ -167,6 +169,7 @@ function AppContent() {
               path="/mobile/login"
               element={user ? <Navigate to="/mobile/rent" replace /> : <MobileLogin />}
             />
+            <Route path="/auth/microsoft/callback" element={<MicrosoftCallback />} />
 
             {/* 등록 페이지 */}
             <Route path="/register" element={<ProtectedRoute element={<Register />} isMobile={isMobile} />} />
@@ -275,6 +278,16 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<DeviceManage />}
+                  isAdmin={true}
+                  isMobile={isMobile}
+                />
+              }
+            />
+            <Route
+              path="/admin/change-requests"
+              element={
+                <ProtectedRoute
+                  element={<DeviceChangeRequests />}
                   isAdmin={true}
                   isMobile={isMobile}
                 />

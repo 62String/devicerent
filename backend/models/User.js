@@ -6,7 +6,15 @@ const UserSchema = new Schema({
   name: { type: String, required: true },
   affiliation: { type: String, required: true },
   id: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: {
+    type: String,
+    required: function() {
+      return (this.authProvider || 'local') === 'local';
+    }
+  },
+  authProvider: { type: String, enum: ['local', 'microsoft'], default: 'local' },
+  microsoftOid: { type: String, default: '', index: true },
+  email: { type: String, default: '' },
   position: { type: String, required: true, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] },
   roleLevel: { type: Number, default: 5 },
   isPending: { type: Boolean, default: true },
@@ -42,6 +50,7 @@ UserSchema.pre('save', async function(next) {
 });
 
 UserSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -55,6 +64,9 @@ UserSchema.set('toJSON', {
     ret.roleLevel = ret.roleLevel;
     ret.isPending = ret.isPending;
     ret.isAdmin = ret.isAdmin;
+    ret.authProvider = ret.authProvider;
+    ret.microsoftOid = ret.microsoftOid;
+    ret.email = ret.email;
     delete ret.password;
     delete ret.__v;
     return ret;

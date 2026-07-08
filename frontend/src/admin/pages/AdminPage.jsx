@@ -80,7 +80,8 @@ function AdminPage() {
 
   const menuItems = [
     { title: '사용자 목록', desc: '전체 사용자 조회 · 권한 관리', path: '/admin/users' },
-    { title: '승인 대기 목록', desc: '가입 신청 승인 / 거절', path: '/admin/pending' },
+    { title: '가입 승인 대기', desc: '가입 신청 승인 / 거절', path: '/admin/pending' },
+    { title: '업무 승인 대기', desc: '장기대여 · 디바이스 제보 검토', path: '/longterm/approvals' },
     { title: '디바이스 관리', desc: '디바이스 등록 · 상태 관리', path: '/devices/manage' },
     { title: '익스포트 내역', desc: '엑셀 익스포트 기록 조회', path: '/admin/export-history' },
   ];
