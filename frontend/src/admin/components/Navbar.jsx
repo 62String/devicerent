@@ -7,12 +7,13 @@ import { DeviceIcon, MoonIcon, SunIcon, LogoutIcon } from '../../components/Icon
 
 function ThemeToggle() {
   const [theme, setTheme] = useState(getTheme());
+  const themeToggleTitle = theme === 'dark' ? '라이트모드' : '다크모드';
   return (
     <button
       type="button"
       className="icon-btn"
-      aria-label="다크모드 전환"
-      title="다크모드 전환"
+      aria-label={`${themeToggleTitle} 전환`}
+      title={themeToggleTitle}
       onClick={() => setTheme(toggleTheme())}
     >
       {theme === 'dark' ? <SunIcon size={15} /> : <MoonIcon size={15} />}

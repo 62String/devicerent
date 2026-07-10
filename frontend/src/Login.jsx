@@ -15,6 +15,7 @@ function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const apiUrl = getApiUrl();
+  const themeToggleTitle = theme === 'dark' ? '라이트모드' : '다크모드';
 
   useEffect(() => {
     if (error) {
@@ -66,7 +67,8 @@ function Login() {
         <button
           type="button"
           className="icon-btn"
-          aria-label="다크모드 전환"
+          aria-label={`${themeToggleTitle} 전환`}
+          title={themeToggleTitle}
           onClick={() => setTheme(toggleTheme())}
         >
           {theme === 'dark' ? <SunIcon size={15} /> : <MoonIcon size={15} />}

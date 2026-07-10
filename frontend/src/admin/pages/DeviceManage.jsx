@@ -60,6 +60,65 @@ const getDeviceType = (device) => {
   return /(ipad|tablet|tab|pad|패드|태블릿)/i.test(text) ? '패드' : '모바일';
 };
 
+const formatDateTime = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+};
+
+const buildRentalPairs = (records = []) => {
+  const sortedHistory = [...records].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const rentRecords = [];
+  const pairs = [];
+
+  sortedHistory.forEach((record) => {
+    if (record.action === 'rent') {
+      rentRecords.push({ ...record, matched: false });
+      return;
+    }
+
+    if (record.action === 'return') {
+      const matchingRent = rentRecords.find((rent) => !rent.matched);
+      if (matchingRent) {
+        matchingRent.matched = true;
+      }
+      pairs.push({
+        serialNumber: record.serialNumber,
+        modelName: record.deviceInfo?.modelName || matchingRent?.deviceInfo?.modelName || 'N/A',
+        osName: record.deviceInfo?.osName || matchingRent?.deviceInfo?.osName || 'N/A',
+        osVersion: record.deviceInfo?.osVersion || matchingRent?.deviceInfo?.osVersion || '',
+        userName: record.userDetails?.name || matchingRent?.userDetails?.name || '알 수 없음',
+        affiliation: record.userDetails?.affiliation || matchingRent?.userDetails?.affiliation || '',
+        rentTime: matchingRent?.timestamp || null,
+        returnTime: record.timestamp,
+        remark: matchingRent?.remark || record.remark || '',
+        rentalType: matchingRent?.rentalType || record.rentalType || 'normal',
+        longTermStatus: matchingRent?.longTermStatus || record.longTermStatus || 'none',
+      });
+    }
+  });
+
+  rentRecords
+    .filter((rent) => !rent.matched)
+    .forEach((rent) => {
+      pairs.push({
+        serialNumber: rent.serialNumber,
+        modelName: rent.deviceInfo?.modelName || 'N/A',
+        osName: rent.deviceInfo?.osName || 'N/A',
+        osVersion: rent.deviceInfo?.osVersion || '',
+        userName: rent.userDetails?.name || '알 수 없음',
+        affiliation: rent.userDetails?.affiliation || '',
+        rentTime: rent.timestamp,
+        returnTime: null,
+        remark: rent.remark || '',
+        rentalType: rent.rentalType || 'normal',
+        longTermStatus: rent.longTermStatus || 'none',
+      });
+    });
+
+  return pairs.sort((a, b) => new Date(b.rentTime || b.returnTime || 0) - new Date(a.rentTime || a.returnTime || 0));
+};
+
 const DeviceManage = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,7 +132,12 @@ const DeviceManage = () => {
   const [showExportConfirmModal, setShowExportConfirmModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showRentalHistoryModal, setShowRentalHistoryModal] = useState(false);
   const [detailDevice, setDetailDevice] = useState(null);
+  const [rentalHistoryDevice, setRentalHistoryDevice] = useState(null);
+  const [rentalHistoryPairs, setRentalHistoryPairs] = useState([]);
+  const [rentalHistoryPage, setRentalHistoryPage] = useState(1);
+  const [loadingRentalHistory, setLoadingRentalHistory] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -92,6 +156,7 @@ const DeviceManage = () => {
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const devicesPerPage = 50;
   const historyPerPage = 50;
+  const rentalHistoryPerPage = 10;
   const token = localStorage.getItem('token');
   const apiUrl = getApiUrl();
 
@@ -179,6 +244,12 @@ const DeviceManage = () => {
   const currentDevices = sortedDevices.slice(indexOfFirstDevice, indexOfLastDevice);
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / devicesPerPage));
   const historyTotalPages = Math.max(1, Math.ceil(filteredStatusHistory.length / historyPerPage));
+  const rentalHistoryTotalPages = Math.max(1, Math.ceil(rentalHistoryPairs.length / rentalHistoryPerPage));
+  const rentalHistoryOffset = (rentalHistoryPage - 1) * rentalHistoryPerPage;
+  const currentRentalHistoryPairs = rentalHistoryPairs.slice(
+    rentalHistoryOffset,
+    rentalHistoryOffset + rentalHistoryPerPage
+  );
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -358,6 +429,34 @@ const DeviceManage = () => {
   const closeDetailModal = () => {
     setShowDetailModal(false);
     setDetailDevice(null);
+  };
+
+  const openRentalHistoryModal = async (device) => {
+    setRentalHistoryDevice(device);
+    setRentalHistoryPairs([]);
+    setRentalHistoryPage(1);
+    setShowRentalHistoryModal(true);
+    setLoadingRentalHistory(true);
+    try {
+      const response = await axios.get(`${apiUrl}/api/devices/history/device/${encodeURIComponent(device.serialNumber)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      setRentalHistoryPairs(buildRentalPairs(response.data || []));
+    } catch (error) {
+      setMessage('기기별 대여 이력 조회 실패');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setLoadingRentalHistory(false);
+    }
+  };
+
+  const closeRentalHistoryModal = () => {
+    setShowRentalHistoryModal(false);
+    setRentalHistoryDevice(null);
+    setRentalHistoryPairs([]);
+    setRentalHistoryPage(1);
+    setLoadingRentalHistory(false);
   };
 
   const handleSaveDetails = async (draft) => {
@@ -659,7 +758,7 @@ const DeviceManage = () => {
             devices.length > 0 ? (
               <>
                 <div className="card overflow-x-auto">
-                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 1040 }}>
+                  <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 1120 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 92 }} className="cursor-pointer select-none" onClick={() => handleSort('serialNumber')}>
@@ -675,7 +774,7 @@ const DeviceManage = () => {
                         <th style={{ width: 100 }}>대여일시</th>
                         <th style={{ width: 76 }}>상태</th>
                         <th>상태 변경 사유</th>
-                        <th style={{ width: 240 }}></th>
+                        <th style={{ width: 310 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -715,6 +814,7 @@ const DeviceManage = () => {
                             <td className="text-right">
                               <div className="flex gap-1.5 justify-end">
                                 <button onClick={() => openDetailModal(device)} className="btn btn-outline btn-sm">상세 정보</button>
+                                <button onClick={() => openRentalHistoryModal(device)} className="btn btn-outline btn-sm">대여이력</button>
                                 <button onClick={() => openStatusModal(device)} className="btn btn-outline btn-sm">상태 변경</button>
                                 <button
                                   onClick={() => openDeleteModal(device)}
@@ -754,6 +854,82 @@ const DeviceManage = () => {
             onClose={closeDetailModal}
             onSave={handleSaveDetails}
           />
+        )}
+
+        {showRentalHistoryModal && (
+          <div className="modal-overlay" onClick={closeRentalHistoryModal}>
+            <div className="modal-box" style={{ maxWidth: 900 }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <div className="modal-title">기기별 대여 이력</div>
+                  <div className="text-xs text-sub mt-0.5">
+                    <span className="td-mono">{rentalHistoryDevice?.serialNumber}</span>
+                    {' · '}
+                    {rentalHistoryDevice?.modelName || rentalHistoryDevice?.deviceInfo || 'N/A'}
+                  </div>
+                </div>
+                <button className="icon-btn" aria-label="닫기" onClick={closeRentalHistoryModal}><XIcon size={14} /></button>
+              </div>
+              <div className="modal-body">
+                {loadingRentalHistory ? (
+                  <div className="text-center text-sub text-sm py-8">대여 이력을 불러오는 중입니다.</div>
+                ) : rentalHistoryPairs.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 760 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 110 }}>대여자</th>
+                          <th style={{ width: 120 }}>소속</th>
+                          <th style={{ width: 150 }}>대여 시간</th>
+                          <th style={{ width: 150 }}>반납 시간</th>
+                          <th style={{ width: 90 }}>대여 유형</th>
+                          <th>특이사항</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentRentalHistoryPairs.map((history, index) => (
+                          <tr key={`${history.serialNumber}-${history.rentTime || history.returnTime}-${index}`}>
+                            <td className="td-sub">{history.userName}</td>
+                            <td className="td-sub">{history.affiliation || <span className="td-hint">—</span>}</td>
+                            <td className="td-sub text-xs">{formatDateTime(history.rentTime)}</td>
+                            <td className="td-sub text-xs">
+                              {history.returnTime
+                                ? formatDateTime(history.returnTime)
+                                : <span className="badge badge-warn">대여중</span>}
+                            </td>
+                            <td>
+                              {history.rentalType === 'longterm'
+                                ? <span className={history.longTermStatus === 'approved' ? 'badge badge-ok' : 'badge badge-warn'}>
+                                    {history.longTermStatus === 'approved' ? '장기 승인완료' : '장기 승인대기'}
+                                  </span>
+                                : <span className="badge badge-neutral">일반</span>}
+                            </td>
+                            <td className="td-sub">
+                              <div className="truncate" title={history.remark || ''}>
+                                {history.remark || <span className="td-hint">—</span>}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                      <span className="text-xs text-hint">
+                        총 {rentalHistoryPairs.length}건 중 {rentalHistoryOffset + 1}–{Math.min(rentalHistoryOffset + rentalHistoryPerPage, rentalHistoryPairs.length)}
+                      </span>
+                      {rentalHistoryTotalPages > 1 && pageButtons(rentalHistoryPage, rentalHistoryTotalPages, setRentalHistoryPage)}
+                      <span />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-sub text-sm py-8">이 기기의 대여 이력이 없습니다.</div>
+                )}
+              </div>
+              <div className="modal-foot">
+                <button onClick={closeRentalHistoryModal} className="btn btn-outline">닫기</button>
+              </div>
+            </div>
+          </div>
         )}
 
         {showDeleteModal && (

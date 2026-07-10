@@ -476,6 +476,22 @@ router.post('/change-requests/:id/reject', adminAuth, async (req, res) => {
   }
 });
 
+// 기기별 대여 히스토리 (관리자 전용)
+router.get('/history/device/:serialNumber', adminAuth, async (req, res) => {
+  try {
+    const serialNumber = String(req.params.serialNumber || '').trim();
+    if (!serialNumber) {
+      return res.status(400).json({ message: '시리얼 번호가 필요합니다.' });
+    }
+
+    const history = await RentalHistory.find({ serialNumber }).sort({ timestamp: -1 }).lean();
+    res.json(history);
+  } catch (error) {
+    console.error('Fetch device rental history error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // 대여 히스토리 (모든 사용자 접근 가능)
 router.get('/history', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
