@@ -211,7 +211,7 @@ function DeviceChangeRequests({ embedded = false, onChanged }) {
         </div>
 
         {selectedRequest && (
-          <div className="modal-overlay" onClick={closeReviewModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>

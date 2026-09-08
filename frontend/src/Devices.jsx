@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
 import { getApiUrl } from './utils/api';
 import { SearchIcon, XIcon } from './components/Icons';
@@ -53,9 +53,15 @@ const SEARCH_SCOPE_OPTIONS = [
   { value: 'specs', label: '스펙 전체' },
 ];
 
+const OS_FILTER_OPTIONS = [
+  { value: 'all', label: 'OS 전체' },
+  { value: 'aos', label: 'AOS' },
+  { value: 'ios', label: 'iOS' },
+];
+
 const SEARCH_FIELDS = {
   serial: ['serialNumber'],
-  model: ['modelName', 'deviceInfo', 'osName', 'osVersion'],
+  model: ['modelName', 'deviceInfo'],
   deviceType: ['details.deviceType'],
   osVersion: ['osVersion'],
   chipset: ['details.chipset'],
@@ -76,11 +82,16 @@ const getSearchValue = (device, field) => {
   return device?.[field] || '';
 };
 
+const normalizeSearchText = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/\+/g, 'plus')
+  .replace(/\s+/g, '');
+
 const matchesSearch = (device, query, scope) => {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return true;
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
   const fields = SEARCH_FIELDS[scope] || SEARCH_FIELDS.all;
-  return fields.some((field) => String(getSearchValue(device, field)).toLowerCase().includes(trimmed));
+  return fields.some((field) => normalizeSearchText(getSearchValue(device, field)).includes(normalizedQuery));
 };
 
 const STATUS_LABELS = {
@@ -181,6 +192,7 @@ function Devices() {
   const [devices, setDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [searchScope, setSearchScope] = useState('all');
+  const [osFilter, setOsFilter] = useState('all');
   const [viewFilter, setViewFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -210,6 +222,7 @@ function Devices() {
   const { user } = useAuth();
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  const location = useLocation();
 
   const apiUrl = getApiUrl();
 
@@ -248,8 +261,17 @@ function Devices() {
     return true;
   };
 
+  const matchesOsFilter = (device) => {
+    if (osFilter === 'all') return true;
+    const osName = String(device?.osName || '').trim().toLowerCase();
+    if (osFilter === 'aos') return osName === 'android' || osName === 'aos';
+    if (osFilter === 'ios') return osName === 'ios';
+    return true;
+  };
+
   const filteredAndSortedDevices = devices
     .filter(matchesRentalFilter)
+    .filter(matchesOsFilter)
     .filter(device => device && matchesSearch(device, searchSerial, searchScope))
     .sort((a, b) => {
       if (!sortField) return 0;
@@ -350,11 +372,17 @@ function Devices() {
     }
   };
 
-  const closeRemarkModal = () => {
+  const cancelRentFlow = () => {
+    setShowConfirmModal(false);
+    setShowRemarkPrompt(false);
     setShowRemarkModal(false);
     setRemark('');
     setRentalType('normal');
     setCurrentSerialNumber(null);
+  };
+
+  const closeRemarkModal = () => {
+    cancelRentFlow();
   };
 
   const openReturnModal = (serialNumber) => {
@@ -515,8 +543,42 @@ function Devices() {
   const resetSearch = () => {
     setSearchSerial('');
     setSearchScope('all');
+    setOsFilter('all');
     setCurrentPage(1);
   };
+
+  const resetDevicesPage = useCallback(() => {
+    setSearchSerial('');
+    setSearchScope('all');
+    setOsFilter('all');
+    setViewFilter('all');
+    setCurrentPage(1);
+    setSortField('');
+    setSortOrder('asc');
+    setMessage('');
+    setShowConfirmModal(false);
+    setShowRemarkPrompt(false);
+    setShowRemarkModal(false);
+    setShowReturnModal(false);
+    setShowStatusModal(false);
+    setShowRemarkViewModal(false);
+    setShowReportModal(false);
+    setDetailDevice(null);
+    setReportDevice(null);
+    setReportType('os_change');
+    setReportOsName('');
+    setReportOsVersion('');
+    setReportReason('');
+    setSubmittingReport(false);
+    setCurrentSerialNumber(null);
+    setRemark('');
+    setRentalType('normal');
+    setSelectedRemark('');
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.resetDevicesAt) resetDevicesPage();
+  }, [location.state?.resetDevicesAt, resetDevicesPage]);
 
   const pageNumbers = () => {
     const pages = [];
@@ -595,6 +657,16 @@ function Devices() {
               className="input w-full pl-9"
             />
           </div>
+          <select
+            value={osFilter}
+            onChange={(e) => { setOsFilter(e.target.value); setCurrentPage(1); }}
+            className="input"
+            aria-label="OS 필터"
+          >
+            {OS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
           <select
             value={searchScope}
             onChange={(e) => { setSearchScope(e.target.value); setCurrentPage(1); }}
@@ -812,7 +884,7 @@ function Devices() {
         {detailDevice && <DeviceDetailsModal device={detailDevice} onClose={closeDetailModal} onReport={openReportModal} />}
 
         {showReportModal && reportDevice && (
-          <div className="modal-overlay" onClick={closeReportModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
@@ -887,7 +959,7 @@ function Devices() {
         )}
 
         {showConfirmModal && (
-          <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
@@ -896,7 +968,7 @@ function Devices() {
                     <span className="td-mono">{currentSerialNumber}</span> 디바이스를 대여하시겠습니까?
                   </div>
                 </div>
-                <button className="icon-btn" aria-label="닫기" onClick={() => setShowConfirmModal(false)}><XIcon size={14} /></button>
+                <button className="icon-btn" aria-label="닫기" onClick={cancelRentFlow}><XIcon size={14} /></button>
               </div>
               <div className="modal-body">
                 <label className="field-label">대여 유형</label>
@@ -925,7 +997,7 @@ function Devices() {
                 )}
               </div>
               <div className="modal-foot">
-                <button onClick={() => setShowConfirmModal(false)} className="btn btn-outline">취소</button>
+                <button onClick={cancelRentFlow} className="btn btn-outline">취소</button>
                 <button onClick={confirmRent} className="btn btn-primary">{rentalType === 'external' ? '승인 요청' : '대여하기'}</button>
               </div>
             </div>
@@ -933,15 +1005,17 @@ function Devices() {
         )}
 
         {showRemarkPrompt && (
-          <div className="modal-overlay" onClick={() => handleRemarkPrompt(false)}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div className="modal-title">특이사항 등록</div>
+                <button className="icon-btn" aria-label="닫기" onClick={cancelRentFlow}><XIcon size={14} /></button>
               </div>
               <div className="modal-body">
                 기기 상태 등 기록해둘 특이사항이 있나요?
               </div>
               <div className="modal-foot">
+                <button onClick={cancelRentFlow} className="btn btn-outline">취소</button>
                 <button onClick={() => handleRemarkPrompt(false)} className="btn btn-outline">없음 — 바로 대여</button>
                 <button onClick={() => handleRemarkPrompt(true)} className="btn btn-primary">특이사항 입력</button>
               </div>
@@ -950,7 +1024,7 @@ function Devices() {
         )}
 
         {showRemarkModal && (
-          <div className="modal-overlay" onClick={closeRemarkModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
@@ -1014,7 +1088,7 @@ function Devices() {
         )}
 
         {showStatusModal && (
-          <div className="modal-overlay" onClick={closeStatusModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>

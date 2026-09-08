@@ -40,6 +40,33 @@ const matchesViewFilter = (device, filter, user) => {
   return true;
 };
 
+const matchesDeviceSearch = (device, query) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+
+  const details = device.details || {};
+  return [
+    device.serialNumber,
+    device.modelName,
+    device.deviceInfo,
+    device.osName,
+    device.osVersion,
+    device.rentedBy?.name,
+    device.rentedBy?.affiliation,
+    details.category,
+    details.deviceType,
+    details.manufacturer,
+    details.modelNumber,
+    details.chipset,
+    details.cpu,
+    details.gpu,
+    details.memory,
+    details.bluetooth,
+    details.screenSize,
+    details.resolution,
+  ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
+};
+
 const DeviceStatus = () => {
   const { user } = useAuth();
   const [devices, setDevices] = useState([]);
@@ -56,11 +83,9 @@ const DeviceStatus = () => {
   const apiUrl = getApiUrl();
 
   const applyFilters = (list = devices, query = searchSerial, filter = viewFilter, order = sortOrder) => {
-    const q = query.trim().toLowerCase();
     return sortByRentedAt(list.filter((device) => {
       if (!device) return false;
-      const searchMatched = !q || String(device.serialNumber || '').toLowerCase().includes(q);
-      return searchMatched && matchesViewFilter(device, filter, user);
+      return matchesDeviceSearch(device, query) && matchesViewFilter(device, filter, user);
     }), order);
   };
 
@@ -187,7 +212,7 @@ const DeviceStatus = () => {
               type="text"
               value={searchSerial}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="시리얼 번호 검색"
+              placeholder="시리얼, 기기명, OS, 사용자, 주요 사양 검색"
               className="input w-full pl-9"
             />
           </div>

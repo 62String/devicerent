@@ -31,6 +31,11 @@ function Navbar() {
     navigate(isMobile ? '/mobile/login' : '/login');
   };
 
+  const handleDevicesNavigation = (event) => {
+    event.preventDefault();
+    navigate('/devices', { state: { resetDevicesAt: Date.now() } });
+  };
+
   const navLinkClass = ({ isActive }) =>
     isActive ? 'nav-link nav-link-active' : 'nav-link';
 
@@ -42,6 +47,7 @@ function Navbar() {
           DeviceRent
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <Link to="/portal" className="nav-link">홈</Link>
           <span className="text-[13px] text-sub">
             <span className="font-medium text-ink">{user?.name}</span> 님
           </span>
@@ -56,11 +62,12 @@ function Navbar() {
 
   return (
     <nav className="navbar">
-      <Link to="/devices" className="nav-brand">
+      <Link to="/devices" className="nav-brand" onClick={handleDevicesNavigation}>
         <DeviceIcon size={17} />
         DeviceRent
       </Link>
-      <NavLink to="/devices" end className={navLinkClass}>대여하기</NavLink>
+      <Link to="/portal" className="nav-link">홈</Link>
+      <NavLink to="/devices" end className={navLinkClass} onClick={handleDevicesNavigation}>대여하기</NavLink>
       <NavLink to="/devices/status" className={navLinkClass}>대여 현황</NavLink>
       <NavLink to="/devices/history" className={navLinkClass}>대여 히스토리</NavLink>
       {canViewDashboard(user) && (

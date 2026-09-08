@@ -93,7 +93,7 @@ const DeviceDetailsModal = ({ device, canEdit = false, saving = false, onClose, 
   );
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={isEditing ? undefined : onClose}>
       <div className="modal-box" style={{ maxWidth: 780 }} onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <div>

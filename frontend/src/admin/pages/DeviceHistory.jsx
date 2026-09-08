@@ -42,6 +42,31 @@ const sortHistoryPairs = (pairs, sortBy = 'rentTime', sortOrder = 'desc') => [..
   return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
 });
 
+const matchesHistorySearch = (pair, query) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+
+  const details = pair.details || {};
+  return [
+    pair.serialNumber,
+    pair.modelName,
+    pair.osName,
+    pair.osVersion,
+    pair.userDetails,
+    details.category,
+    details.deviceType,
+    details.manufacturer,
+    details.modelNumber,
+    details.chipset,
+    details.cpu,
+    details.gpu,
+    details.memory,
+    details.bluetooth,
+    details.screenSize,
+    details.resolution,
+  ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
+};
+
 function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
   const [originalPairs, setOriginalPairs] = useState([]);
@@ -133,7 +158,8 @@ function DeviceHistory() {
                 rentalType: matchingRent.rentalType || record.rentalType || device?.rentalType || 'normal',
                 longTermStatus: matchingRent.longTermStatus || record.longTermStatus || device?.longTermStatus || 'none',
                 status: device?.status || 'N/A',
-                statusReason: device?.statusReason || ''
+                statusReason: device?.statusReason || '',
+                details: device?.details || {}
               });
               matchingRent.matched = true;
             } else {
@@ -151,7 +177,8 @@ function DeviceHistory() {
                 rentalType: record.rentalType || device?.rentalType || 'normal',
                 longTermStatus: record.longTermStatus || device?.longTermStatus || 'none',
                 status: device?.status || 'N/A',
-                statusReason: device?.statusReason || ''
+                statusReason: device?.statusReason || '',
+                details: device?.details || {}
               });
             }
           }
@@ -174,14 +201,15 @@ function DeviceHistory() {
               rentalType: rent.rentalType || device?.rentalType || 'normal',
               longTermStatus: rent.longTermStatus || device?.longTermStatus || 'none',
               status: device?.status || 'N/A',
-              statusReason: device?.statusReason || ''
+              statusReason: device?.statusReason || '',
+              details: device?.details || {}
             });
           }
         });
 
         const sortedPairs = sortHistoryPairs(pairs, sortBy, sortOrder);
 
-        setHistoryPairs(sortedPairs);
+        setHistoryPairs(sortedPairs.filter(pair => matchesHistorySearch(pair, searchSerial)));
         setOriginalPairs(sortedPairs);
       } catch (err) {
         if (isMounted) {
@@ -199,15 +227,12 @@ function DeviceHistory() {
 
   const handleSearch = (value) => {
     setSearchSerial(value);
-    const trimmedSearch = value.trim();
-    if (!trimmedSearch) {
+    if (!value.trim()) {
       setHistoryPairs(sortHistoryPairs(originalPairs, sortBy, sortOrder));
       setCurrentPage(1);
       return;
     }
-    const filtered = originalPairs.filter(pair =>
-      pair.serialNumber.toLowerCase().includes(trimmedSearch.toLowerCase())
-    );
+    const filtered = originalPairs.filter(pair => matchesHistorySearch(pair, value));
     setHistoryPairs(sortHistoryPairs(filtered, sortBy, sortOrder));
     setCurrentPage(1);
   };
@@ -302,7 +327,7 @@ function DeviceHistory() {
               type="text"
               value={searchSerial}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="시리얼 번호 검색"
+              placeholder="시리얼, 기기명, OS, 사용자, 주요 사양 검색"
               className="input w-full pl-9"
             />
           </div>

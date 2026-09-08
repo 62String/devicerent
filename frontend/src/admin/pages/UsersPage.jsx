@@ -278,7 +278,7 @@ function UsersPage() {
         )}
 
         {showDeleteModal && (
-          <div className="modal-overlay" onClick={closeDeleteModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
@@ -306,7 +306,7 @@ function UsersPage() {
         )}
 
         {roleChangeTarget && (
-          <div className="modal-overlay" onClick={closeRoleChangeModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>

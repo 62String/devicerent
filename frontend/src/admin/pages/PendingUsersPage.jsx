@@ -168,7 +168,7 @@ function PendingUsersPage() {
         )}
 
         {showRejectModal && (
-          <div className="modal-overlay" onClick={closeRejectModal}>
+          <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
