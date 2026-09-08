@@ -21,7 +21,10 @@ function ThemeToggle() {
   );
 }
 
-const isTeamLeadOrAbove = (u) => ['팀장', '실장', '센터장'].includes(u?.position);
+const isTeamLeadOrAbove = (u) => {
+  if (Number(u?.roleLevel) <= 3) return true;
+  return ['팀장', '실장', '센터장'].includes(u?.position);
+};
 
 function Navbar() {
   const { user, logout } = useAuth();

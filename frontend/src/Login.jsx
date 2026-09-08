@@ -51,14 +51,14 @@ function Login() {
       const userData = meResponse.data.user;
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
-      navigate('/devices');
+      navigate('/portal');
     } catch (error) {
       setError(error.response?.data?.message || '로그인에 실패했습니다.');
     }
   };
 
   const handleMicrosoftLogin = () => {
-    window.location.href = `${apiUrl}/api/auth/microsoft/start?redirect=/devices`;
+    window.location.href = `${apiUrl}/api/auth/microsoft/start?redirect=/portal`;
   };
 
   return (

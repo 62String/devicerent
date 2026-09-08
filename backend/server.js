@@ -711,6 +711,7 @@ app.get('/api/me', async (req, res) => {
         name: user.name,
         affiliation: user.affiliation,
         position: user.position,
+        roleLevel: user.roleLevel || 5,
         isPending: user.isPending || false,
         isAdmin: user.isAdmin || false,
         authProvider: user.authProvider || 'local',

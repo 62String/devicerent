@@ -92,8 +92,29 @@ const hasPendingChangeRequest = (device) => (
   Boolean(device?.hasPendingChangeRequest) || Boolean(device?.pendingChangeRequests?.length)
 );
 
+const hasPendingExternalRental = (device) => (
+  Boolean(device?.pendingExternalRentalBy) ||
+  (['external', 'longterm'].includes(device?.rentalType) && device?.longTermStatus === 'pending')
+);
+
+const getRentalType = (device) => {
+  if (['external', 'longterm'].includes(device?.rentalType)) return 'external';
+  if (device?.rentalType === 'home') return 'home';
+  return 'normal';
+};
+
+const RENTAL_TYPE_META = {
+  normal: { label: '일반', activeLabel: '일반대여중', className: 'badge badge-neutral' },
+  home: { label: '재택', activeLabel: '재택대여중', className: 'badge badge-ok' },
+  external: { label: '외부', activeLabel: '외부대여중', className: 'badge badge-warn' },
+};
+
 const isRentable = (device) => (
-  device?.status === 'active' && !device?.rentedBy && !hasPendingChangeRequest(device)
+  device?.status === 'active' && !device?.rentedBy && !hasPendingExternalRental(device) && !hasPendingChangeRequest(device)
+);
+
+const isVisibleInRentalList = (device) => (
+  device?.status !== 'inactive'
 );
 
 const getDeviceRowClass = (device) => {
@@ -220,6 +241,7 @@ function Devices() {
   const matchesRentalFilter = (device) => {
     if (!device) return false;
     if (viewFilter === 'available') return isRentable(device);
+    if (!isVisibleInRentalList(device)) return false;
     if (viewFilter === 'rented') return !!device.rentedBy;
     if (viewFilter === 'mine') return !!user && device.rentedBy?.name === user.name;
     return true;
@@ -238,9 +260,10 @@ function Devices() {
   const currentDevices = filteredAndSortedDevices.slice(indexOfFirstDevice, indexOfLastDevice);
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedDevices.length / devicesPerPage));
 
+  const visibleDevices = devices.filter(isVisibleInRentalList);
   const availableCount = devices.filter(isRentable).length;
-  const rentedCount = devices.filter(d => d.rentedBy).length;
-  const myCount = devices.filter(d => d.rentedBy && d.rentedBy.name === user?.name).length;
+  const rentedCount = visibleDevices.filter(d => d.rentedBy).length;
+  const myCount = visibleDevices.filter(d => d.rentedBy && d.rentedBy.name === user?.name).length;
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -278,8 +301,8 @@ function Devices() {
 
   const confirmRent = () => {
     setShowConfirmModal(false);
-    // 장기대여는 사유가 필요하므로 곧장 입력 단계로, 일반대여는 특이사항 여부부터 확인
-    if (rentalType === 'longterm') {
+    // 외부대여는 승인 사유가 필수이므로 곧장 입력 단계로 이동한다.
+    if (rentalType === 'external') {
       setShowRemarkModal(true);
     } else {
       setShowRemarkPrompt(true);
@@ -300,14 +323,19 @@ function Devices() {
       alert('대여할 디바이스를 선택해 주세요.');
       return;
     }
+    if (rentalType === 'external' && !remark.trim()) {
+      setMessage('외부대여는 사유를 반드시 입력해야 합니다.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
     try {
       const payload = { deviceId: currentSerialNumber, remark, rentalType };
       await axios.post(`${apiUrl}/api/devices/rent-device`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       await fetchDevices();
-      setMessage(rentalType === 'longterm'
-        ? '장기대여 승인 요청이 등록되었습니다. 팀장 승인 후 확정됩니다.'
+      setMessage(rentalType === 'external'
+        ? '외부대여 승인 요청이 등록되었습니다. 승인 전까지 해당 기기는 잠금 처리됩니다.'
         : '대여가 성공적으로 완료되었습니다.');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -518,7 +546,7 @@ function Devices() {
         <div className="flex gap-2.5 mt-5 mb-4 flex-wrap">
           <button type="button" className="stat-card text-left" style={statCardStyle('all')} onClick={() => applyViewFilter('all')}>
             <div className="stat-card-label">전체</div>
-            <div className="stat-card-value">{devices.length}</div>
+            <div className="stat-card-value">{visibleDevices.length}</div>
           </button>
           <button
             type="button"
@@ -623,8 +651,12 @@ function Devices() {
                 <tbody>
                   {currentDevices.map(device => {
                     const rented = formatRentedAt(device.rentedAt);
+                    const pendingExternal = hasPendingExternalRental(device);
+                    const pendingApplicant = device.pendingExternalRentalBy;
+                    const pendingAt = formatRentedAt(device.pendingExternalRentalAt);
                     const isMine = user && device.rentedBy && device.rentedBy.name === user.name;
                     const details = device.details || {};
+                    const rentalMeta = RENTAL_TYPE_META[getRentalType(device)] || RENTAL_TYPE_META.normal;
                     return (
                       <tr key={device.serialNumber} className={getDeviceRowClass(device)}>
                         <td className="td-mono">{device.serialNumber || 'N/A'}</td>
@@ -655,6 +687,11 @@ function Devices() {
                               <div className="cell-main">{device.rentedBy.name}</div>
                               <div className="cell-sub">{device.rentedBy.affiliation || 'N/A'}</div>
                             </>
+                          ) : pendingExternal && pendingApplicant ? (
+                            <>
+                              <div className="cell-main">{pendingApplicant.name}</div>
+                              <div className="cell-sub">{pendingApplicant.affiliation || 'N/A'}</div>
+                            </>
                           ) : (
                             <span className="td-hint">—</span>
                           )}
@@ -665,12 +702,17 @@ function Devices() {
                               <div className="td-sub">{rented.date}</div>
                               <div className="cell-sub">{rented.time}</div>
                             </>
+                          ) : pendingAt ? (
+                            <>
+                              <div className="td-sub">{pendingAt.date}</div>
+                              <div className="cell-sub">{pendingAt.time}</div>
+                            </>
                           ) : (
                             <span className="td-hint">—</span>
                           )}
                         </td>
                         <td>
-                          {device.rentedBy && device.remark ? (
+                          {(device.rentedBy || pendingExternal) && device.remark ? (
                             <button
                               type="button"
                               className="remark-preview w-full"
@@ -696,8 +738,10 @@ function Devices() {
                             isMine ? (
                               <button onClick={() => openReturnModal(device.serialNumber)} className="btn btn-accent-outline btn-sm">반납</button>
                             ) : (
-                              <span className="badge badge-warn">대여중</span>
+                              <span className={rentalMeta.className}>{rentalMeta.activeLabel}</span>
                             )
+                          ) : pendingExternal ? (
+                            <span className="badge badge-warn">외부 승인대기</span>
                           ) : hasPendingChangeRequest(device) ? (
                             <span className="badge badge-warn">제보 승인대기</span>
                           ) : isRentable(device) ? (
@@ -856,7 +900,7 @@ function Devices() {
               <div className="modal-body">
                 <label className="field-label">대여 유형</label>
                 <div className="flex gap-2">
-                  {[['normal', '일반 대여'], ['longterm', '장기대여 · 출장']].map(([val, label]) => (
+                  {[['normal', '일반'], ['external', '외부'], ['home', '재택']].map(([val, label]) => (
                     <button
                       key={val}
                       type="button"
@@ -873,15 +917,15 @@ function Devices() {
                     </button>
                   ))}
                 </div>
-                {rentalType === 'longterm' && (
+                {rentalType === 'external' && (
                   <div className="alert alert-warn mt-2.5" style={{ marginBottom: 0, fontSize: 12 }}>
-                    팀장 승인 후 정식 장기대여로 확정됩니다. 반납 예정일과 사유를 특이사항에 적어주세요.
+                    외부대여는 관리자 승인 전까지 대여 처리되지 않으며, 해당 기기는 승인 대기 상태로 잠금 처리됩니다.
                   </div>
                 )}
               </div>
               <div className="modal-foot">
                 <button onClick={() => setShowConfirmModal(false)} className="btn btn-outline">취소</button>
-                <button onClick={confirmRent} className="btn btn-primary">{rentalType === 'longterm' ? '승인 요청' : '대여하기'}</button>
+                <button onClick={confirmRent} className="btn btn-primary">{rentalType === 'external' ? '승인 요청' : '대여하기'}</button>
               </div>
             </div>
           </div>
@@ -909,22 +953,22 @@ function Devices() {
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
-                  <div className="modal-title">{rentalType === 'longterm' ? '장기대여 사유 입력' : '특이사항 입력'}</div>
+                  <div className="modal-title">{rentalType === 'external' ? '외부대여 사유 입력' : '특이사항 입력'}</div>
                   <div className="text-xs text-sub mt-0.5"><span className="td-mono">{currentSerialNumber}</span></div>
                 </div>
                 <button className="icon-btn" aria-label="닫기" onClick={closeRemarkModal}><XIcon size={14} /></button>
               </div>
               <div className="modal-body">
-                {rentalType === 'longterm' && (
+                {rentalType === 'external' && (
                   <div className="alert alert-warn" style={{ fontSize: 12 }}>
-                    팀장 승인 후 정식 장기대여로 확정됩니다.
+                    외부대여는 사유 입력과 관리자 승인이 필수입니다. 승인 전에는 대여중으로 확정되지 않습니다.
                   </div>
                 )}
                 <textarea
                   value={remark}
                   onChange={(e) => setRemark(e.target.value)}
-                  placeholder={rentalType === 'longterm'
-                    ? '예) 6/30까지 ○○프로젝트 업데이트 대응 장기 대여'
+                  placeholder={rentalType === 'external'
+                    ? '예) 외부 회의/고객사 방문 중 테스트용으로 반출'
                     : '예) 액정 좌측 상단 미세 기스, 케이스 동봉'}
                   className="input w-full resize-none"
                   rows={4}
@@ -932,7 +976,13 @@ function Devices() {
               </div>
               <div className="modal-foot">
                 <button onClick={closeRemarkModal} className="btn btn-outline">취소</button>
-                <button onClick={() => { setShowRemarkModal(false); submitRent(); }} className="btn btn-primary">{rentalType === 'longterm' ? '승인 요청' : '대여하기'}</button>
+                <button
+                  onClick={() => submitRent()}
+                  className="btn btn-primary"
+                  disabled={rentalType === 'external' && !remark.trim()}
+                >
+                  {rentalType === 'external' ? '승인 요청' : '대여하기'}
+                </button>
               </div>
             </div>
           </div>

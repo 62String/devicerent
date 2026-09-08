@@ -28,12 +28,25 @@ const sortByRentedAt = (list, order = 'desc') => [...list].sort((a, b) => {
   return order === 'asc' ? aTime - bTime : bTime - aTime;
 });
 
+const getRentalType = (device) => {
+  if (['external', 'longterm'].includes(device?.rentalType)) return 'external';
+  if (device?.rentalType === 'home') return 'home';
+  return 'normal';
+};
+
+const matchesViewFilter = (device, filter, user) => {
+  if (filter === 'mine') return device.rentedBy?.name === user?.name;
+  if (['normal', 'home', 'external'].includes(filter)) return getRentalType(device) === filter;
+  return true;
+};
+
 const DeviceStatus = () => {
   const { user } = useAuth();
   const [devices, setDevices] = useState([]);
   const [allDevices, setAllDevices] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
+  const [viewFilter, setViewFilter] = useState('all');
   const [error, setError] = useState(null);
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [selectedRemark, setSelectedRemark] = useState('');
@@ -41,6 +54,15 @@ const DeviceStatus = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const token = localStorage.getItem('token');
   const apiUrl = getApiUrl();
+
+  const applyFilters = (list = devices, query = searchSerial, filter = viewFilter, order = sortOrder) => {
+    const q = query.trim().toLowerCase();
+    return sortByRentedAt(list.filter((device) => {
+      if (!device) return false;
+      const searchMatched = !q || String(device.serialNumber || '').toLowerCase().includes(q);
+      return searchMatched && matchesViewFilter(device, filter, user);
+    }), order);
+  };
 
   useEffect(() => {
     if (!token) {
@@ -66,7 +88,7 @@ const DeviceStatus = () => {
 
       if (rentedDevices.length > 0) {
         setDevices(rentedDevices);
-        setFilteredDevices(rentedDevices);
+        setFilteredDevices(applyFilters(rentedDevices, searchSerial, viewFilter, sortOrder));
       } else {
         setDevices([]);
         setFilteredDevices([]);
@@ -80,19 +102,17 @@ const DeviceStatus = () => {
 
   const handleSearch = (value) => {
     setSearchSerial(value);
-    if (!value.trim()) {
-      setFilteredDevices(sortByRentedAt(devices, sortOrder));
-      return;
-    }
-    const filtered = devices.filter(device =>
-      device && device.serialNumber.toLowerCase().includes(value.toLowerCase())
-    );
-    setFilteredDevices(sortByRentedAt(filtered, sortOrder));
+    setFilteredDevices(applyFilters(devices, value, viewFilter, sortOrder));
+  };
+
+  const handleViewFilter = (filter) => {
+    setViewFilter(filter);
+    setFilteredDevices(applyFilters(devices, searchSerial, filter, sortOrder));
   };
 
   useEffect(() => {
     setDevices((current) => sortByRentedAt(current, sortOrder));
-    setFilteredDevices((current) => sortByRentedAt(current, sortOrder));
+    setFilteredDevices(applyFilters(devices, searchSerial, viewFilter, sortOrder));
   }, [sortOrder]);
 
   const openRemarkModal = (device) => {
@@ -110,6 +130,16 @@ const DeviceStatus = () => {
   const availableCount = allDevices.filter(device => !device.rentedBy).length;
   const rentedCount = allDevices.filter(device => device.rentedBy).length;
   const myCount = allDevices.filter(device => device.rentedBy?.name === user?.name).length;
+  const normalRentCount = devices.filter(device => getRentalType(device) === 'normal').length;
+  const homeRentCount = devices.filter(device => getRentalType(device) === 'home').length;
+  const externalRentCount = devices.filter(device => getRentalType(device) === 'external').length;
+
+  const statCardStyle = (filter, accent = 'var(--accent)') => ({
+    cursor: 'pointer',
+    borderColor: viewFilter === filter ? accent : 'var(--line)',
+    background: viewFilter === filter ? 'var(--accent-soft)' : 'var(--surface)',
+    boxShadow: viewFilter === filter ? `inset 0 0 0 1px ${accent}` : undefined,
+  });
 
   return (
     <div className="min-h-screen bg-paper">
@@ -118,10 +148,10 @@ const DeviceStatus = () => {
         <p className="page-sub">현재 대여 중인 디바이스 목록입니다</p>
 
         <div className="flex gap-2.5 mt-5 mb-4 flex-wrap">
-          <div className="stat-card">
+          <button type="button" className="stat-card text-left" style={statCardStyle('all')} onClick={() => handleViewFilter('all')}>
             <div className="stat-card-label">전체</div>
             <div className="stat-card-value">{allDevices.length}</div>
-          </div>
+          </button>
           <div className="stat-card" style={{ borderTop: '3px solid var(--ok)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
             <div className="stat-card-label">대여 가능</div>
             <div className="stat-card-value" style={{ color: 'var(--ok)' }}>{availableCount}</div>
@@ -130,10 +160,22 @@ const DeviceStatus = () => {
             <div className="stat-card-label">대여중</div>
             <div className="stat-card-value" style={{ color: 'var(--warn)' }}>{rentedCount}</div>
           </div>
-          <div className="stat-card">
+          <button type="button" className="stat-card text-left" style={statCardStyle('mine')} onClick={() => handleViewFilter('mine')}>
             <div className="stat-card-label">내 대여</div>
             <div className="stat-card-value" style={{ color: 'var(--accent)' }}>{myCount}</div>
-          </div>
+          </button>
+          <button type="button" className="stat-card text-left" style={statCardStyle('normal')} onClick={() => handleViewFilter('normal')}>
+            <div className="stat-card-label">일반</div>
+            <div className="stat-card-value">{normalRentCount}</div>
+          </button>
+          <button type="button" className="stat-card text-left" style={statCardStyle('home', 'var(--ok)')} onClick={() => handleViewFilter('home')}>
+            <div className="stat-card-label">재택</div>
+            <div className="stat-card-value" style={{ color: 'var(--ok)' }}>{homeRentCount}</div>
+          </button>
+          <button type="button" className="stat-card text-left" style={statCardStyle('external', 'var(--warn)')} onClick={() => handleViewFilter('external')}>
+            <div className="stat-card-label">외부</div>
+            <div className="stat-card-value" style={{ color: 'var(--warn)' }}>{externalRentCount}</div>
+          </button>
         </div>
 
         <div className="flex gap-2 mb-4 flex-wrap items-center">

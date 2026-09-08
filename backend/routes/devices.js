@@ -21,6 +21,14 @@ const DB_SIZE_LIMIT = 0.95; // 95% 임계점
 const EXPORT_DIR = process.env.EXPORT_DIR || path.join(__dirname, '..', 'exports', 'Device-list');
 const apiUrl = process.env.API_URL || 'http://localhost:4000';
 
+const normalizeRentalType = (rentalType) => {
+  if (['external', 'longterm', 'business', 'trip'].includes(rentalType)) return 'external';
+  if (['home', 'remote', 'work_from_home'].includes(rentalType)) return 'home';
+  return 'normal';
+};
+
+const isExternalRental = (rentalType) => ['external', 'longterm'].includes(rentalType);
+
 if (!fs.existsSync(EXPORT_DIR)) {
   try {
     fs.mkdirSync(EXPORT_DIR, { recursive: true });
@@ -145,8 +153,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
     const now = Date.now();
     const devices = await Device.find().lean();
 
-    // counts: rented=대여중 전체, longtermApproved=승인된 장기대여, pendingApproval=장기대여 승인 대기,
-    //         overdue=장기 미반납(일반대여 72h+ 또는 미승인 장기대여 72h+ — 승인된 장기대여는 제외)
+    // counts.longtermApproved는 기존 프론트 호환을 위해 유지하며, 의미는 승인된 외부대여다.
     const counts = { total: devices.length, available: 0, rented: 0, longtermApproved: 0, pendingApproval: 0, maintenance: 0, overdue: 0 };
     const osDistribution = {};
     const statusDistribution = { active: 0, repair: 0, inactive: 0 };
@@ -163,15 +170,16 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       osDistribution[os] = (osDistribution[os] || 0) + 1;
 
       // 대여 가능/대여중 + 경과시간
+      const pendingExternal = isExternalRental(device.rentalType) && device.longTermStatus === 'pending';
+      if (pendingExternal) counts.pendingApproval += 1;
+
       if (device.rentedBy) {
         counts.rented += 1;
-        const rentalType = device.rentalType === 'longterm' ? 'longterm' : 'normal';
-        const longTermStatus = rentalType === 'longterm' ? (device.longTermStatus === 'approved' ? 'approved' : 'pending') : 'none';
+        const rentalType = normalizeRentalType(device.rentalType);
+        const longTermStatus = rentalType === 'external' ? (device.longTermStatus === 'approved' ? 'approved' : 'pending') : 'none';
         if (longTermStatus === 'approved') counts.longtermApproved += 1;
-        if (longTermStatus === 'pending') counts.pendingApproval += 1;
         const rentedAtMs = device.rentedAt ? new Date(device.rentedAt).getTime() : null;
         const elapsedHours = rentedAtMs ? Math.floor((now - rentedAtMs) / (1000 * 60 * 60)) : null;
-        // 회수 대상: 임계 초과 + (일반대여 또는 미승인 장기대여). 승인된 장기대여는 사전 합의된 점유라 제외.
         const overdue = longTermStatus !== 'approved' && elapsedHours !== null && elapsedHours >= OVERDUE_HOURS;
         if (overdue) counts.overdue += 1;
         rentedDevices.push({
@@ -188,7 +196,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
           elapsedHours,
           overdue,
         });
-      } else if (status === 'active') {
+      } else if (status === 'active' && !pendingExternal) {
         counts.available += 1;
       }
     });
@@ -264,29 +272,34 @@ router.get('/dashboard', adminAuth, async (req, res) => {
   }
 });
 
-// ===== 장기대여 승인 워크플로우 (팀장 이상 전용) =====
+// ===== 외부대여 승인 워크플로우 (팀장 이상 전용) =====
 
 // 승인 대기 목록
 router.get('/longterm/pending', requireRoleLevel(3), async (req, res) => {
   try {
     const now = Date.now();
     const devices = await Device.find({
-      rentalType: 'longterm',
+      rentalType: { $in: ['external', 'longterm'] },
       longTermStatus: 'pending',
-      rentedBy: { $ne: null }
+      $or: [
+        { pendingExternalRentalBy: { $ne: null } },
+        { rentedBy: { $ne: null } }
+      ]
     }).lean();
     const pending = devices.map((d) => {
-      const rentedAtMs = d.rentedAt ? new Date(d.rentedAt).getTime() : null;
-      const elapsedHours = rentedAtMs ? Math.floor((now - rentedAtMs) / (1000 * 60 * 60)) : null;
+      const applicant = d.pendingExternalRentalBy || d.rentedBy || {};
+      const requestedAt = d.pendingExternalRentalAt || d.rentedAt || null;
+      const requestedAtMs = requestedAt ? new Date(requestedAt).getTime() : null;
+      const elapsedHours = requestedAtMs ? Math.floor((now - requestedAtMs) / (1000 * 60 * 60)) : null;
       return {
         serialNumber: d.serialNumber,
         modelName: d.modelName || d.deviceInfo || 'N/A',
         osName: d.osName || '',
         osVersion: d.osVersion || '',
-        renterName: d.rentedBy?.name || '',
-        affiliation: d.rentedBy?.affiliation || '',
+        renterName: applicant.name || '',
+        affiliation: applicant.affiliation || '',
         remark: d.remark || '',
-        rentedAt: d.rentedAt || null,
+        rentedAt: requestedAt,
         elapsedHours,
         overdue: elapsedHours !== null && elapsedHours >= OVERDUE_HOURS,
       };
@@ -298,50 +311,103 @@ router.get('/longterm/pending', requireRoleLevel(3), async (req, res) => {
   }
 });
 
-// 장기대여 승인 — pending → approved
+// 외부대여 승인 — pending → 실제 대여중
 router.post('/longterm/approve', requireRoleLevel(3), async (req, res) => {
   const { serialNumber } = req.body;
   try {
-    const device = await Device.findOneAndUpdate(
-      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: { $ne: null } },
-      { $set: { longTermStatus: 'approved', approvedBy: req.user.name, approvedAt: new Date() } },
-      { new: true }
-    );
-    if (!device) {
-      const current = await Device.findOne({ serialNumber, rentalType: 'longterm', longTermStatus: 'pending' }).lean();
-      if (current && !current.rentedBy) {
-        return res.status(409).json({ message: '이미 반납된 장기대여 요청입니다. 승인할 수 없습니다.' });
-      }
-      return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+    const current = await Device.findOne({
+      serialNumber,
+      rentalType: { $in: ['external', 'longterm'] },
+      longTermStatus: 'pending'
+    });
+    if (!current) {
+      return res.status(404).json({ message: '승인 대기 중인 외부대여 건을 찾을 수 없습니다.' });
     }
-    res.json({ message: '장기대여가 승인되었습니다.', device });
+    if (current.rentedBy && !current.pendingExternalRentalBy) {
+      current.rentalType = 'external';
+      current.longTermStatus = 'approved';
+      current.approvedBy = req.user.name;
+      current.approvedAt = new Date();
+      await current.save();
+      return res.json({ message: '외부대여가 승인되었습니다.', device: current });
+    }
+    if (current.rentedBy) {
+      return res.status(409).json({ message: '이미 대여 중인 디바이스라 외부대여를 승인할 수 없습니다.' });
+    }
+    if (!current.pendingExternalRentalBy) {
+      return res.status(404).json({ message: '외부대여 신청자 정보를 찾을 수 없습니다.' });
+    }
+
+    const approvedAt = new Date();
+    current.rentedBy = current.pendingExternalRentalBy;
+    current.rentedAt = approvedAt;
+    current.rentalType = 'external';
+    current.longTermStatus = 'approved';
+    current.approvedBy = req.user.name;
+    current.approvedAt = approvedAt;
+    current.pendingExternalRentalBy = null;
+    current.pendingExternalRentalAt = null;
+    await current.save();
+
+    const applicant = current.rentedBy;
+    await RentalHistory.create({
+      deviceId: current._id,
+      serialNumber: current.serialNumber,
+      userId: applicant.id || applicant.name,
+      action: 'rent',
+      rentalType: 'external',
+      longTermStatus: 'approved',
+      userDetails: {
+        name: applicant.name || 'Unknown',
+        affiliation: applicant.affiliation || 'N/A'
+      },
+      deviceInfo: {
+        modelName: current.modelName,
+        osName: current.osName,
+        osVersion: current.osVersion
+      },
+      remark: current.remark || '',
+      timestamp: current.rentedAt
+    });
+
+    res.json({ message: '외부대여가 승인되었습니다.', device: current });
   } catch (error) {
-    console.error('Longterm approve error:', error);
+    console.error('External approve error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// 장기대여 거절 — pending → 일반대여로 환원(미반납 시 회수 대상)
+// 외부대여 거절 — pending 잠금 해제
 router.post('/longterm/reject', requireRoleLevel(3), async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const device = await Device.findOneAndUpdate(
-      { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: { $ne: null } },
-      { $set: { rentalType: 'normal', longTermStatus: 'none', approvedBy: '', approvedAt: null } },
+      {
+        serialNumber,
+        rentalType: { $in: ['external', 'longterm'] },
+        longTermStatus: 'pending'
+      },
+      {
+        $set: {
+          rentedBy: null,
+          rentedAt: null,
+          rentalType: 'normal',
+          longTermStatus: 'none',
+          approvedBy: '',
+          approvedAt: null,
+          pendingExternalRentalBy: null,
+          pendingExternalRentalAt: null,
+          remark: ''
+        }
+      },
       { new: true }
     );
     if (!device) {
-      const stale = await Device.findOneAndUpdate(
-        { serialNumber, rentalType: 'longterm', longTermStatus: 'pending', rentedBy: null },
-        { $set: { rentalType: 'normal', longTermStatus: 'none', approvedBy: '', approvedAt: null } },
-        { new: true }
-      );
-      if (stale) return res.json({ message: '이미 반납된 장기대여 요청을 승인 대기 목록에서 해제했습니다.', device: stale });
-      return res.status(404).json({ message: '승인 대기 중인 장기대여 건을 찾을 수 없습니다.' });
+      return res.status(404).json({ message: '승인 대기 중인 외부대여 건을 찾을 수 없습니다.' });
     }
-    res.json({ message: '장기대여 신청이 거절되어 일반대여로 전환되었습니다.', device });
+    res.json({ message: '외부대여 신청이 거절되어 대여 가능 상태로 전환되었습니다.', device });
   } catch (error) {
-    console.error('Longterm reject error:', error);
+    console.error('External reject error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -812,13 +878,18 @@ router.post('/manage/register', adminAuth, async (req, res) => {
 router.post('/manage/delete', adminAuth, async (req, res) => {
   const { serialNumber } = req.body;
   try {
-    const device = await Device.findOneAndDelete({ serialNumber, rentedBy: null });
+    const device = await Device.findOneAndDelete({ serialNumber, rentedBy: null, pendingExternalRentalBy: null });
     if (!device) {
-      const existingDevice = await Device.findOne({ serialNumber }).select('rentedBy');
+      const existingDevice = await Device.findOne({ serialNumber }).select('rentedBy pendingExternalRentalBy');
       if (!existingDevice) return res.status(404).json({ message: "Device not found" });
       if (existingDevice.rentedBy) {
         return res.status(409).json({
           message: '대여 중인 디바이스는 삭제할 수 없습니다. 먼저 반납 처리해주세요.'
+        });
+      }
+      if (existingDevice.pendingExternalRentalBy) {
+        return res.status(409).json({
+          message: '외부대여 승인 대기 중인 디바이스는 삭제할 수 없습니다. 먼저 승인 또는 거절 처리해주세요.'
         });
       }
       return res.status(409).json({ message: 'Device state changed. Please try again.' });
@@ -987,6 +1058,7 @@ router.get('/available', async (req, res) => {
     const devices = await Device.find({
       status: 'active',
       rentedBy: null,
+      pendingExternalRentalBy: null,
       serialNumber: { $nin: pendingSerials }
     }).lean();
     if (!devices || devices.length === 0) {
@@ -1015,7 +1087,8 @@ router.post('/rent-device', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const { deviceId, remark = '', rentalType = 'normal' } = req.body;
-    const normalizedRentalType = rentalType === 'longterm' ? 'longterm' : 'normal';
+    const normalizedRentalType = normalizeRentalType(rentalType);
+    const normalizedRemark = String(remark || '').trim();
 
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -1028,20 +1101,58 @@ router.post('/rent-device', async (req, res) => {
       return res.status(409).json({ message: "승인 대기 중인 디바이스 제보가 있어 대여할 수 없습니다." });
     }
 
-    // 장기대여는 승인 대기(pending)로 신청 — 기기는 나가되 팀장 이상 승인 전까지 미승인 상태.
-    const longTermStatus = normalizedRentalType === 'longterm' ? 'pending' : 'none';
+    if (normalizedRentalType === 'external' && !normalizedRemark) {
+      return res.status(400).json({ message: '외부대여는 사유를 반드시 입력해야 합니다.' });
+    }
+
     const rentedAt = new Date();
+
+    if (normalizedRentalType === 'external') {
+      const device = await Device.findOneAndUpdate(
+        {
+          serialNumber: deviceId,
+          rentedBy: null,
+          pendingExternalRentalBy: null,
+          status: 'active'
+        },
+        {
+          $set: {
+            pendingExternalRentalBy: { id: user.id, name: user.name, affiliation: user.affiliation },
+            pendingExternalRentalAt: rentedAt,
+            remark: normalizedRemark,
+            rentalType: 'external',
+            longTermStatus: 'pending',
+            approvedBy: '',
+            approvedAt: null
+          }
+        },
+        { new: true }
+      );
+
+      if (!device) {
+        const currentDevice = await Device.findOne({ serialNumber: deviceId }).lean();
+        if (!currentDevice) return res.status(404).json({ message: "Device not found" });
+        if (currentDevice.rentedBy) return res.status(409).json({ message: "Device already rented" });
+        if (currentDevice.pendingExternalRentalBy) return res.status(409).json({ message: "외부대여 승인 대기 중인 디바이스입니다." });
+        return res.status(400).json({ message: `Device is not available (${currentDevice.status}${currentDevice.statusReason ? `: ${currentDevice.statusReason}` : ''})` });
+      }
+
+      return res.json({ message: "외부대여 승인 요청이 등록되었습니다." });
+    }
+
     const device = await Device.findOneAndUpdate(
-      { serialNumber: deviceId, rentedBy: null, status: 'active' },
+      { serialNumber: deviceId, rentedBy: null, pendingExternalRentalBy: null, status: 'active' },
       {
         $set: {
           rentedBy: { name: user.name, affiliation: user.affiliation },
           rentedAt,
-          remark,
+          remark: normalizedRemark,
           rentalType: normalizedRentalType,
-          longTermStatus,
+          longTermStatus: 'none',
           approvedBy: '',
-          approvedAt: null
+          approvedAt: null,
+          pendingExternalRentalBy: null,
+          pendingExternalRentalAt: null
         }
       },
       { new: true }
@@ -1051,6 +1162,7 @@ router.post('/rent-device', async (req, res) => {
       const currentDevice = await Device.findOne({ serialNumber: deviceId }).lean();
       if (!currentDevice) return res.status(404).json({ message: "Device not found" });
       if (currentDevice.rentedBy) return res.status(409).json({ message: "Device already rented" });
+      if (currentDevice.pendingExternalRentalBy) return res.status(409).json({ message: "외부대여 승인 대기 중인 디바이스입니다." });
       return res.status(400).json({ message: `Device is not available (${currentDevice.status}${currentDevice.statusReason ? `: ${currentDevice.statusReason}` : ''})` });
     }
 
@@ -1065,10 +1177,10 @@ router.post('/rent-device', async (req, res) => {
       userId: user.id,
       action: 'rent',
       rentalType: normalizedRentalType,
-      longTermStatus,
+      longTermStatus: 'none',
       userDetails: { name: user.name.trim(), affiliation: user.affiliation.trim() },
       deviceInfo: deviceInfo,
-      remark: remark,
+      remark: normalizedRemark,
       timestamp: rentedAt
     };
     await RentalHistory.create(historyData);
@@ -1119,6 +1231,8 @@ router.post('/return-device', async (req, res) => {
           longTermStatus: 'none',
           approvedBy: '',
           approvedAt: null,
+          pendingExternalRentalBy: null,
+          pendingExternalRentalAt: null,
           status: normalizedStatus,
           statusReason: statusReason
         }

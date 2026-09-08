@@ -15,7 +15,7 @@ function MicrosoftCallback() {
     const finishLogin = async () => {
       const error = searchParams.get('error');
       const token = searchParams.get('token');
-      const redirect = searchParams.get('redirect') || '/devices';
+      const redirect = searchParams.get('redirect') || '/portal';
 
       if (error) {
         setMessage(error);
@@ -37,7 +37,7 @@ function MicrosoftCallback() {
         const userData = meResponse.data.user;
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-        navigate(redirect.startsWith('/') ? redirect : '/devices', { replace: true });
+        navigate(redirect.startsWith('/') ? redirect : '/portal', { replace: true });
       } catch (callbackError) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');

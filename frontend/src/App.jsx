@@ -12,6 +12,7 @@ import LongTermApproval from './admin/pages/LongTermApproval';
 import DeviceStatus from './admin/pages/DeviceStatus';
 import Login from './Login';
 import MicrosoftCallback from './MicrosoftCallback';
+import Portal from './Portal';
 import MobileLogin from './mobile/MobileLogin';
 import Register from './Register';
 import ExportHistory from './admin/pages/ExportHistory';
@@ -53,7 +54,10 @@ class ErrorBoundary extends Component {
   }
 }
 
-const isTeamLeadOrAbove = (u) => ['팀장', '실장', '센터장'].includes(u?.position);
+const isTeamLeadOrAbove = (u) => {
+  if (Number(u?.roleLevel) <= 3) return true;
+  return ['팀장', '실장', '센터장'].includes(u?.position);
+};
 
 // ProtectedRoute 컴포넌트
 const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isMobile }) => {
@@ -100,7 +104,7 @@ const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isM
     return <Navigate to={redirectPath} replace />;
   }
 
-  // 팀장 이상 권한 확인 (장기대여 승인 등)
+  // 팀장 이상 권한 확인 (외부대여 승인 등)
   if (requireTeamLead && !isTeamLeadOrAbove(user)) {
     return <Navigate to={isMobile ? "/mobile/rent" : "/devices"} replace />;
   }
@@ -118,7 +122,7 @@ const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isM
     if (process.env.NODE_ENV === 'development') {
       console.log('ProtectedRoute: Redirecting to /login due to PC access on mobile path');
     }
-    return <Navigate to={user ? "/devices" : "/login"} replace />;
+    return <Navigate to={user ? "/portal" : "/login"} replace />;
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -129,6 +133,7 @@ const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isM
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -158,12 +163,12 @@ function AppContent() {
         <div>Loading...</div>
       ) : (
         <>
-          {user && <Navbar />}
+          {user && location.pathname !== '/portal' && <Navbar />}
           <Routes>
             {/* 로그인 페이지 */}
             <Route
               path="/login"
-              element={user ? <Navigate to="/devices" replace /> : <Login />}
+              element={user ? <Navigate to="/portal" replace /> : <Login />}
             />
             <Route
               path="/mobile/login"
@@ -186,6 +191,15 @@ function AppContent() {
             />
 
             {/* PC 전용 페이지 */}
+            <Route
+              path="/portal"
+              element={
+                <ProtectedRoute
+                  element={<Portal />}
+                  isMobile={isMobile}
+                />
+              }
+            />
             <Route
               path="/admin"
               element={
@@ -297,7 +311,7 @@ function AppContent() {
             {/* 기본 경로 및 404 */}
             <Route
               path="/"
-              element={<Navigate to={isMobile ? "/mobile/login" : "/login"} replace />}
+              element={<Navigate to={user ? (isMobile ? "/mobile/rent" : "/portal") : (isMobile ? "/mobile/login" : "/login")} replace />}
             />
             <Route path="*" element={<NotFound />} />
           </Routes>

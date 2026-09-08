@@ -84,10 +84,10 @@ function LongTermApproval() {
       <div className="page-wrap" style={{ maxWidth: 1100 }}>
         <div className="flex items-center gap-2.5 flex-wrap">
           <h1 className="page-title">승인 대기</h1>
-          {pending.length > 0 && <span className="badge badge-danger" style={{ fontSize: 12, padding: '3px 10px' }}>장기대여 {pending.length}건</span>}
+          {pending.length > 0 && <span className="badge badge-danger" style={{ fontSize: 12, padding: '3px 10px' }}>외부대여 {pending.length}건</span>}
           {pendingReportCount > 0 && <span className="badge badge-warn" style={{ fontSize: 12, padding: '3px 10px' }}>디바이스 제보 {pendingReportCount}건</span>}
         </div>
-        <p className="page-sub">장기대여 신청과 디바이스 정보 제보를 한곳에서 검토합니다</p>
+        <p className="page-sub">외부대여 신청과 디바이스 정보 제보를 한곳에서 검토합니다</p>
 
         <div className="flex gap-2 mt-5 mb-4 flex-wrap">
           <button
@@ -95,7 +95,7 @@ function LongTermApproval() {
             className={`btn ${activeTab === 'longterm' ? 'btn-ink' : 'btn-outline'}`}
             onClick={() => setActiveTab('longterm')}
           >
-            장기대여 승인 {pending.length > 0 ? `(${pending.length})` : ''}
+            외부대여 승인 {pending.length > 0 ? `(${pending.length})` : ''}
           </button>
           <button
             type="button"
@@ -116,7 +116,7 @@ function LongTermApproval() {
           {loading ? (
             <div className="card p-10 text-center text-sub text-sm">불러오는 중...</div>
           ) : pending.length === 0 ? (
-            <div className="card p-10 text-center text-sub text-sm">승인 대기 중인 장기대여가 없습니다.</div>
+            <div className="card p-10 text-center text-sub text-sm">승인 대기 중인 외부대여가 없습니다.</div>
           ) : (
             <div className="card overflow-x-auto">
               <table className="table-note" style={{ tableLayout: 'fixed', minWidth: 820 }}>
@@ -169,7 +169,7 @@ function LongTermApproval() {
         )}
         {activeTab === 'longterm' && (
           <div className="text-[11px] text-hint mt-2.5">
-            승인하면 정식 장기대여로 전환됩니다. 거절하면 일반대여로 남아, 기한 초과 시 장기 미반납 목록에 표시됩니다.
+            승인하면 실제 외부대여로 확정됩니다. 거절하면 승인 대기 잠금이 해제되어 다시 대여 가능 상태가 됩니다.
           </div>
         )}
       </div>

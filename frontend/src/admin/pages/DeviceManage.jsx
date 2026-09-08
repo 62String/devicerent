@@ -301,6 +301,11 @@ const DeviceManage = () => {
       setTimeout(() => setMessage(''), 3000);
       return;
     }
+    if (device.pendingExternalRentalBy) {
+      setMessage('외부대여 승인 대기 중인 디바이스는 삭제할 수 없습니다. 먼저 승인 또는 거절 처리해주세요.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
     setSelectedDevice(device);
     setShowDeleteModal(true);
   };
@@ -780,6 +785,8 @@ const DeviceManage = () => {
                     <tbody>
                       {currentDevices.map(device => {
                         const badge = STATUS_BADGE[device.status];
+                        const pendingExternal = Boolean(device.pendingExternalRentalBy) ||
+                          (['external', 'longterm'].includes(device.rentalType) && device.longTermStatus === 'pending');
                         return (
                           <tr key={device.serialNumber}>
                             <td className="td-mono">{device.serialNumber}</td>
@@ -794,15 +801,26 @@ const DeviceManage = () => {
                                   <div className="cell-main">{device.rentedBy.name}</div>
                                   <div className="cell-sub">{device.rentedBy.affiliation || 'N/A'}</div>
                                 </>
+                              ) : pendingExternal && device.pendingExternalRentalBy ? (
+                                <>
+                                  <div className="cell-main">{device.pendingExternalRentalBy.name}</div>
+                                  <div className="cell-sub">{device.pendingExternalRentalBy.affiliation || 'N/A'}</div>
+                                </>
                               ) : (
                                 <span className="td-hint">—</span>
                               )}
                             </td>
                             <td className="td-sub text-xs">
-                              {device.rentedAt ? new Date(device.rentedAt).toLocaleString() : <span className="td-hint">—</span>}
+                              {device.rentedAt
+                                ? new Date(device.rentedAt).toLocaleString()
+                                : device.pendingExternalRentalAt
+                                  ? new Date(device.pendingExternalRentalAt).toLocaleString()
+                                  : <span className="td-hint">—</span>}
                             </td>
                             <td>
-                              {badge
+                              {pendingExternal
+                                ? <span className="badge badge-warn">외부승인대기</span>
+                                : badge
                                 ? <span className={badge.className}>{badge.label}</span>
                                 : <span className="td-hint">{device.status || '—'}</span>}
                             </td>
@@ -818,14 +836,18 @@ const DeviceManage = () => {
                                 <button onClick={() => openStatusModal(device)} className="btn btn-outline btn-sm">상태 변경</button>
                                 <button
                                   onClick={() => openDeleteModal(device)}
-                                  disabled={Boolean(device.rentedBy)}
-                                  title={device.rentedBy ? '대여 중인 디바이스는 삭제할 수 없습니다.' : '삭제'}
+                                  disabled={Boolean(device.rentedBy || device.pendingExternalRentalBy)}
+                                  title={device.rentedBy
+                                    ? '대여 중인 디바이스는 삭제할 수 없습니다.'
+                                    : device.pendingExternalRentalBy
+                                      ? '외부대여 승인 대기 중인 디바이스는 삭제할 수 없습니다.'
+                                      : '삭제'}
                                   className="btn btn-sm"
                                   style={{
                                     background: 'var(--danger-bg)',
                                     color: 'var(--danger-text)',
-                                    opacity: device.rentedBy ? 0.45 : 1,
-                                    cursor: device.rentedBy ? 'not-allowed' : 'pointer'
+                                    opacity: (device.rentedBy || device.pendingExternalRentalBy) ? 0.45 : 1,
+                                    cursor: (device.rentedBy || device.pendingExternalRentalBy) ? 'not-allowed' : 'pointer'
                                   }}
                                 >
                                   삭제
@@ -898,11 +920,11 @@ const DeviceManage = () => {
                                 : <span className="badge badge-warn">대여중</span>}
                             </td>
                             <td>
-                              {history.rentalType === 'longterm'
+                              {['external', 'longterm'].includes(history.rentalType)
                                 ? <span className={history.longTermStatus === 'approved' ? 'badge badge-ok' : 'badge badge-warn'}>
-                                    {history.longTermStatus === 'approved' ? '장기 승인완료' : '장기 승인대기'}
+                                    {history.longTermStatus === 'approved' ? '외부 승인완료' : '외부 승인대기'}
                                   </span>
-                                : <span className="badge badge-neutral">일반</span>}
+                                : <span className="badge badge-neutral">{history.rentalType === 'home' ? '재택' : '일반'}</span>}
                             </td>
                             <td className="td-sub">
                               <div className="truncate" title={history.remark || ''}>

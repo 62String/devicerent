@@ -5,7 +5,10 @@ import { useAuth } from './utils/AuthContext';
 import { getApiUrl } from './utils/api';
 import { AlertTriangleIcon, PlaneIcon, CheckCircleIcon, ClockIcon } from './components/Icons';
 
-const isTeamLeadOrAbove = (u) => ['팀장', '실장', '센터장'].includes(u?.position);
+const isTeamLeadOrAbove = (u) => {
+  if (Number(u?.roleLevel) <= 3) return true;
+  return ['팀장', '실장', '센터장'].includes(u?.position);
+};
 
 const formatElapsed = (hours) => {
   if (hours == null) return '—';
@@ -74,7 +77,7 @@ function Dashboard() {
 
   const { counts, osDistribution, statusDistribution, rentedDevices = [], recentDeviceChanges = [] } = data;
   const overdueList = rentedDevices.filter(d => d.overdue);
-  const approvedList = rentedDevices.filter(d => d.rentalType === 'longterm' && d.longTermStatus === 'approved');
+  const approvedList = rentedDevices.filter(d => ['external', 'longterm'].includes(d.rentalType) && d.longTermStatus === 'approved');
   const totalOs = Object.values(osDistribution).reduce((a, b) => a + b, 0) || 1;
   const teamLead = isTeamLeadOrAbove(user);
 
@@ -103,9 +106,9 @@ function Dashboard() {
           <div className="stat-card" style={{ borderTop: '3px solid var(--warn)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
             <div className="stat-card-label">대여중</div><div className="stat-card-value" style={{ color: 'var(--warn)' }}>{counts.rented}</div>
           </div>
-          <div className="stat-card"><div className="stat-card-label">장기대여(승인)</div><div className="stat-card-value" style={{ color: 'var(--sub)' }}>{counts.longtermApproved}</div></div>
+          <div className="stat-card"><div className="stat-card-label">외부대여(승인)</div><div className="stat-card-value" style={{ color: 'var(--sub)' }}>{counts.longtermApproved}</div></div>
           <div className="stat-card" style={{ borderTop: '3px solid var(--danger)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-            <div className="stat-card-label">장기 미반납</div><div className="stat-card-value" style={{ color: 'var(--danger)' }}>{counts.overdue}</div>
+            <div className="stat-card-label">미반납 주의</div><div className="stat-card-value" style={{ color: 'var(--danger)' }}>{counts.overdue}</div>
           </div>
         </div>
 
@@ -114,7 +117,7 @@ function Dashboard() {
           <div className="alert alert-warn flex items-center gap-2.5" style={{ marginBottom: 14 }}>
             <ClockIcon size={16} />
             <span className="flex-1 text-[12px]">
-              <b>장기대여 승인 대기 {counts.pendingApproval}건</b> — 팀장 이상 검토가 필요합니다.
+              <b>외부대여 승인 대기 {counts.pendingApproval}건</b> — 팀장 이상 검토가 필요합니다.
             </span>
             {teamLead && (
               <button className="btn btn-sm" style={{ background: 'var(--warn-text)', color: 'var(--surface)' }} onClick={() => navigate('/longterm/approvals')}>
@@ -125,15 +128,15 @@ function Dashboard() {
         )}
 
         <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
-          {/* 장기 미반납 · 회수 필요 */}
+          {/* 미반납 · 회수 필요 */}
           <div className="card" style={{ border: '1px solid var(--danger)' }}>
             <div className="flex items-center justify-between" style={{ padding: '11px 14px', borderBottom: '2px solid var(--danger)' }}>
               <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--danger-text)' }}>
-                <AlertTriangleIcon size={15} /> 장기 미반납 · 회수 필요
+                <AlertTriangleIcon size={15} /> 미반납 · 회수 필요
               </span>
               <span className="badge badge-danger">{overdueList.length}건</span>
             </div>
-            <div className="text-[11px] text-sub px-3.5 pt-2">일반대여 72시간 초과 또는 미승인 장기대여 72시간 초과 — 승인된 장기대여는 제외</div>
+            <div className="text-[11px] text-sub px-3.5 pt-2">일반/재택 대여 72시간 초과 기준 — 승인된 외부대여는 제외</div>
             {overdueList.length === 0 ? (
               <div className="p-8 text-center text-sub text-sm">회수가 필요한 디바이스가 없습니다.</div>
             ) : (
@@ -148,7 +151,7 @@ function Dashboard() {
                 </thead>
                 <tbody>
                   {overdueList.map(d => {
-                    const pendingLong = d.rentalType === 'longterm' && d.longTermStatus === 'pending';
+                    const pendingLong = ['external', 'longterm'].includes(d.rentalType) && d.longTermStatus === 'pending';
                     return (
                       <tr key={d.serialNumber} style={{ background: 'var(--danger-bg)' }}>
                         <td className="td-mono">{d.serialNumber}</td>
@@ -214,14 +217,14 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 장기대여 현황 (승인 완료) */}
+        {/* 외부대여 현황 (승인 완료) */}
         <div className="card">
           <div className="flex items-center justify-between" style={{ padding: '11px 14px', borderBottom: '2px solid var(--line)' }}>
-            <span className="flex items-center gap-1.5 text-sm font-bold text-sub"><PlaneIcon size={15} /> 장기대여 현황 (승인 완료)</span>
+            <span className="flex items-center gap-1.5 text-sm font-bold text-sub"><PlaneIcon size={15} /> 외부대여 현황 (승인 완료)</span>
             <span className="badge badge-ok flex items-center gap-1"><CheckCircleIcon size={12} /> 승인됨</span>
           </div>
           {approvedList.length === 0 ? (
-            <div className="p-8 text-center text-sub text-sm">승인된 장기대여가 없습니다.</div>
+            <div className="p-8 text-center text-sub text-sm">승인된 외부대여가 없습니다.</div>
           ) : (
             <table className="table-note" style={{ tableLayout: 'fixed' }}>
               <thead>

@@ -21,8 +21,15 @@ const STATUS_BADGE = {
 };
 
 const LONGTERM_BADGE = {
-  pending: { label: '장기 승인대기', className: 'badge badge-warn' },
-  approved: { label: '장기 승인완료', className: 'badge badge-ok' },
+  pending: { label: '외부 승인대기', className: 'badge badge-warn' },
+  approved: { label: '외부 승인완료', className: 'badge badge-ok' },
+};
+
+const RENTAL_TYPE_LABEL = {
+  normal: '일반',
+  home: '재택',
+  external: '외부',
+  longterm: '외부',
 };
 
 const getSortTime = (pair, sortBy) => (
@@ -414,7 +421,7 @@ function DeviceHistory() {
                 <tbody>
                   {currentPairs.map((pair, index) => {
                     const badge = STATUS_BADGE[pair.status];
-                    const longtermBadge = pair.rentalType === 'longterm' ? LONGTERM_BADGE[pair.longTermStatus] : null;
+                    const externalBadge = ['external', 'longterm'].includes(pair.rentalType) ? LONGTERM_BADGE[pair.longTermStatus] : null;
                     return (
                       <tr key={index}>
                         <td className="td-mono">{pair.serialNumber}</td>
@@ -435,9 +442,9 @@ function DeviceHistory() {
                             : <span className="td-hint">—</span>}
                         </td>
                         <td>
-                          {longtermBadge
-                            ? <span className={longtermBadge.className}>{longtermBadge.label}</span>
-                            : <span className="badge badge-neutral">일반</span>}
+                          {externalBadge
+                            ? <span className={externalBadge.className}>{externalBadge.label}</span>
+                            : <span className="badge badge-neutral">{RENTAL_TYPE_LABEL[pair.rentalType] || '일반'}</span>}
                         </td>
                         <td>
                           {pair.statusReason ? (
