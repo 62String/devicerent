@@ -5,6 +5,7 @@ import { useAuth } from '../../utils/AuthContext';
 import { getApiUrl } from '../../utils/api';
 import { SearchIcon, XIcon, DownloadIcon, RefreshIcon, ClockIcon } from '../../components/Icons';
 import DeviceDetailsModal from '../../components/DeviceDetailsModal';
+import { canOperateAdmin, isMasterAdmin } from '../../utils/permissions';
 
 const STATUS_BADGE = {
   active: { label: '활성', className: 'badge badge-ok' },
@@ -159,6 +160,8 @@ const DeviceManage = () => {
   const rentalHistoryPerPage = 10;
   const token = localStorage.getItem('token');
   const apiUrl = getApiUrl();
+  const canOperate = canOperateAdmin(user);
+  const canDeleteOrForceInit = isMasterAdmin(user);
 
   useEffect(() => {
     fetchDevices();
@@ -296,6 +299,11 @@ const DeviceManage = () => {
   };
 
   const openDeleteModal = (device) => {
+    if (!canDeleteOrForceInit) {
+      setMessage('디바이스 삭제는 마스터 관리자만 가능합니다.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
     if (device.rentedBy) {
       setMessage('대여 중인 디바이스는 삭제할 수 없습니다. 먼저 반납 처리해주세요.');
       setTimeout(() => setMessage(''), 3000);
@@ -334,7 +342,7 @@ const DeviceManage = () => {
 
   const openStatusModal = (device) => {
     setSelectedDevice(device);
-    setNewStatus(device.status);
+    setNewStatus(!canDeleteOrForceInit && device.status === 'inactive' ? 'active' : device.status);
     setStatusReason(device.statusReason || '');
     setShowStatusModal(true);
   };
@@ -563,7 +571,7 @@ const DeviceManage = () => {
     </div>
   );
 
-  if (!user || !user.isAdmin) {
+  if (!user || !canOperate) {
     return (
       <div className="min-h-screen bg-paper flex items-center justify-center text-sub text-sm">
         관리자 권한이 없습니다.
@@ -584,9 +592,11 @@ const DeviceManage = () => {
               <RefreshIcon size={14} />
               엑셀 초기화
             </button>
-            <button onClick={() => openInitModal(true)} className="btn" style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>
-              엑셀 강제 초기화
-            </button>
+            {canDeleteOrForceInit && (
+              <button onClick={() => openInitModal(true)} className="btn" style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>
+                엑셀 강제 초기화
+              </button>
+            )}
             <button onClick={exportToExcel} className="btn btn-ink">
               <DownloadIcon size={14} />
               엑셀 익스포트
@@ -834,24 +844,26 @@ const DeviceManage = () => {
                                 <button onClick={() => openDetailModal(device)} className="btn btn-outline btn-sm">상세 정보</button>
                                 <button onClick={() => openRentalHistoryModal(device)} className="btn btn-outline btn-sm">대여이력</button>
                                 <button onClick={() => openStatusModal(device)} className="btn btn-outline btn-sm">상태 변경</button>
-                                <button
-                                  onClick={() => openDeleteModal(device)}
-                                  disabled={Boolean(device.rentedBy || device.pendingExternalRentalBy)}
-                                  title={device.rentedBy
-                                    ? '대여 중인 디바이스는 삭제할 수 없습니다.'
-                                    : device.pendingExternalRentalBy
-                                      ? '외부대여 승인 대기 중인 디바이스는 삭제할 수 없습니다.'
-                                      : '삭제'}
-                                  className="btn btn-sm"
-                                  style={{
-                                    background: 'var(--danger-bg)',
-                                    color: 'var(--danger-text)',
-                                    opacity: (device.rentedBy || device.pendingExternalRentalBy) ? 0.45 : 1,
-                                    cursor: (device.rentedBy || device.pendingExternalRentalBy) ? 'not-allowed' : 'pointer'
-                                  }}
-                                >
-                                  삭제
-                                </button>
+                                {canDeleteOrForceInit && (
+                                  <button
+                                    onClick={() => openDeleteModal(device)}
+                                    disabled={Boolean(device.rentedBy || device.pendingExternalRentalBy)}
+                                    title={device.rentedBy
+                                      ? '대여 중인 디바이스는 삭제할 수 없습니다.'
+                                      : device.pendingExternalRentalBy
+                                        ? '외부대여 승인 대기 중인 디바이스는 삭제할 수 없습니다.'
+                                        : '삭제'}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: 'var(--danger-bg)',
+                                      color: 'var(--danger-text)',
+                                      opacity: (device.rentedBy || device.pendingExternalRentalBy) ? 0.45 : 1,
+                                      cursor: (device.rentedBy || device.pendingExternalRentalBy) ? 'not-allowed' : 'pointer'
+                                    }}
+                                  >
+                                    삭제
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -993,7 +1005,7 @@ const DeviceManage = () => {
                 >
                   <option value="active">활성화</option>
                   <option value="repair">수리 필요</option>
-                  <option value="inactive">비활성화</option>
+                  {canDeleteOrForceInit && <option value="inactive">비활성화</option>}
                 </select>
                 <label className="field-label">사유</label>
                 <textarea

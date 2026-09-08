@@ -2,6 +2,20 @@ const User = require('../models/User');
 const { verifyToken } = require('../utils/auth');
 const { JWT_SECRET } = require('../config');
 
+const getAdminLevel = (user) => {
+  const level = Number(user?.roleLevel);
+  return Number.isFinite(level) && level >= 0 ? level : 99;
+};
+
+const buildRequestUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  affiliation: user.affiliation,
+  position: user.position,
+  isAdmin: getAdminLevel(user) <= 2,
+  roleLevel: getAdminLevel(user)
+});
+
 const userAuth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "토큰이 없습니다." });
@@ -11,59 +25,38 @@ const userAuth = async (req, res, next) => {
     if (!user || user.isPending) {
       return res.status(403).json({ message: "승인된 사용자만 가능합니다." });
     }
-    req.user = {
-      id: user.id,
-      name: user.name,
-      affiliation: user.affiliation,
-      position: user.position,
-      isAdmin: user.isAdmin,
-      roleLevel: user.roleLevel || 5
-    };
+    req.user = buildRequestUser(user);
     next();
   } catch (err) {
     res.status(403).json({ message: "유효하지 않은 토큰입니다." });
   }
 };
 
-const adminAuth = async (req, res, next) => {
+const requireAdminLevel = (maxLevel, message = "권한이 부족합니다.") => async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "토큰이 없습니다." });
   try {
     const decoded = await verifyToken(token, JWT_SECRET);
     const user = await User.findOne({ id: decoded.id });
-    if (!user || !user.isAdmin) {
-      return res.status(403).json({ message: "관리자 권한이 필요합니다." });
+    if (!user || user.isPending) {
+      return res.status(403).json({ message: "승인된 사용자만 가능합니다." });
     }
-    req.user = {
-      id: user.id,
-      name: user.name,
-      isAdmin: user.isAdmin,
-      roleLevel: user.roleLevel || 5
-    };
-    next();
-  } catch (err) {
-    res.status(403).json({ message: "유효하지 않은 토큰입니다." });
-  }
-};
-
-// roleLevel 기반 게이트 (센터장1 / 실장2 / 팀장3 / 파트장4 / 연구원5).
-// maxLevel 이하(=상위 직급)만 통과. 예: requireRoleLevel(3) → 팀장 이상.
-const requireRoleLevel = (maxLevel) => async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: "토큰이 없습니다." });
-  try {
-    const decoded = await verifyToken(token, JWT_SECRET);
-    const user = await User.findOne({ id: decoded.id });
-    if (!user) return res.status(403).json({ message: "유효하지 않은 토큰입니다." });
-    const level = user.roleLevel || 5;
+    const level = getAdminLevel(user);
     if (level > maxLevel) {
-      return res.status(403).json({ message: "권한이 부족합니다. 팀장 이상만 가능합니다." });
+      return res.status(403).json({ message });
     }
-    req.user = { id: user.id, name: user.name, isAdmin: user.isAdmin, roleLevel: level };
+    req.user = buildRequestUser(user);
     next();
   } catch (err) {
     res.status(403).json({ message: "유효하지 않은 토큰입니다." });
   }
 };
 
-module.exports = { userAuth, adminAuth, requireRoleLevel };
+const masterAdminAuth = requireAdminLevel(0, "마스터 관리자 권한이 필요합니다.");
+const adminAuth = requireAdminLevel(1, "운영 관리자 이상 권한이 필요합니다.");
+const dashboardAuth = requireAdminLevel(2, "대시보드 조회 권한이 필요합니다.");
+
+// 이전 이름 호환용. 이제 직급이 아니라 관리레벨 기준이다.
+const requireRoleLevel = requireAdminLevel;
+
+module.exports = { userAuth, adminAuth, dashboardAuth, masterAdminAuth, requireAdminLevel, requireRoleLevel, getAdminLevel };

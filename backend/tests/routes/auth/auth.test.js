@@ -54,7 +54,6 @@ describe('Auth API', () => {
           id: 'new-user',
           name: 'New User',
           affiliation: 'New Org',
-          position: '센터장',
           password: 'newpassword',
           passwordConfirm: 'newpassword'
         });
@@ -65,8 +64,9 @@ describe('Auth API', () => {
       const user = await User.findOne({ id: 'new-user' });
       expect(user).toBeTruthy();
       expect(user.isPending).toBe(true);
-      expect(user.isAdmin).toBe(true);
-      expect(user.roleLevel).toBe(1);
+      expect(user.isAdmin).toBe(false);
+      expect(user.roleLevel).toBe(99);
+      expect(user.position).toBe('연구원');
     }, 10000);
 
     it('should fail to register if user already exists', async () => {
@@ -155,13 +155,13 @@ describe('Auth API', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.user).toEqual({
+      expect(res.body.user).toMatchObject({
         id: 'test-user',
         name: 'Test User',
         affiliation: 'Test Org',
-        position: '센터장',
         isPending: false,
-        isAdmin: true
+        isAdmin: true,
+        roleLevel: 1
       });
     }, 10000);
 

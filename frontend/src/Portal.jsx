@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
 import { getTheme, toggleTheme } from './utils/theme';
 import { DeviceIcon, LogoutIcon, MoonIcon, SunIcon } from './components/Icons';
+import { isMasterAdmin } from './utils/permissions';
 
 const systems = [
   {
@@ -64,8 +65,8 @@ function Portal() {
       return;
     }
 
-    if (system.action === 'admin' && !user?.isAdmin) {
-      window.alert('관리자 권한이 필요한 시스템입니다.');
+    if (system.action === 'admin' && !isMasterAdmin(user)) {
+      window.alert('마스터 관리자 권한이 필요한 시스템입니다.');
       return;
     }
 

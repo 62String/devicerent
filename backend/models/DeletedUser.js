@@ -8,7 +8,7 @@ const DeletedUserSchema = new Schema({
   position: { type: String, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] },
   isAdmin: { type: Boolean, default: false },
   isPending: { type: Boolean, default: false },
-  roleLevel: { type: Number, default: 5 },
+  roleLevel: { type: Number, default: 99 },
   deletedAt: { type: Date, required: true },
   reason: { type: String, default: '사유 없음' }
 });

@@ -23,7 +23,7 @@ const DeviceSchema = new Schema({
   rentalType: { type: String, enum: ['normal', 'home', 'external', 'longterm'], default: 'normal' },
   // 외부대여 승인 상태: none(일반/재택) / pending(승인 대기) / approved(승인 완료).
   longTermStatus: { type: String, enum: ['none', 'pending', 'approved'], default: 'none' },
-  approvedBy: { type: String, default: '' },   // 승인한 책임자 이름(팀장 이상)
+  approvedBy: { type: String, default: '' },   // 승인한 운영관리자 이상 사용자 이름
   approvedAt: { type: Date, default: null },
   pendingExternalRentalBy: {
     type: {

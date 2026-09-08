@@ -56,6 +56,7 @@ beforeEach(async () => {
     password: 'testpassword',
     isPending: false,
     isAdmin: true,
+    roleLevel: 0,
   });
 
   // User 생성 확인
@@ -112,7 +113,7 @@ describe('Devices API - manage endpoints (update-status / delete)', () => {
         .post('/api/devices/manage/update-status')
         .send({ serialNumber: 'TEST001', status: 'inactive' });
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe('No token provided');
+      expect(res.body.message).toBe('토큰이 없습니다.');
     });
 
     it('should return 404 if device not found', async () => {

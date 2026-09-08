@@ -9,7 +9,7 @@ const DeviceChangeRequest = require('../models/DeviceChangeRequest');
 const DeviceChangeLog = require('../models/DeviceChangeLog');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const { userAuth, adminAuth, requireRoleLevel } = require('./middleware');
+const { userAuth, adminAuth, dashboardAuth, masterAdminAuth } = require('./middleware');
 const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
@@ -105,7 +105,7 @@ router.post('/history/exports/log', adminAuth, async (req, res) => {
 });
 
 // 엑셀 파일 업로드 및 디바이스 초기화 라우트 추가
-router.post('/admin/upload-devices', adminAuth, upload.single('excelFile'), async (req, res) => {
+router.post('/admin/upload-devices', masterAdminAuth, upload.single('excelFile'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
@@ -148,7 +148,7 @@ router.get('/status', async (req, res) => {
 //       여기서는 "현재 상태" 집계만 제공한다.
 const OVERDUE_HOURS = 72; // 3일 이상 미반납이면 주의(존버) 대상
 
-router.get('/dashboard', adminAuth, async (req, res) => {
+router.get('/dashboard', dashboardAuth, async (req, res) => {
   try {
     const now = Date.now();
     const devices = await Device.find().lean();
@@ -272,10 +272,10 @@ router.get('/dashboard', adminAuth, async (req, res) => {
   }
 });
 
-// ===== 외부대여 승인 워크플로우 (팀장 이상 전용) =====
+// ===== 외부대여 승인 워크플로우 (운영관리자 이상 전용) =====
 
 // 승인 대기 목록
-router.get('/longterm/pending', requireRoleLevel(3), async (req, res) => {
+router.get('/longterm/pending', adminAuth, async (req, res) => {
   try {
     const now = Date.now();
     const devices = await Device.find({
@@ -312,7 +312,7 @@ router.get('/longterm/pending', requireRoleLevel(3), async (req, res) => {
 });
 
 // 외부대여 승인 — pending → 실제 대여중
-router.post('/longterm/approve', requireRoleLevel(3), async (req, res) => {
+router.post('/longterm/approve', adminAuth, async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const current = await Device.findOne({
@@ -378,7 +378,7 @@ router.post('/longterm/approve', requireRoleLevel(3), async (req, res) => {
 });
 
 // 외부대여 거절 — pending 잠금 해제
-router.post('/longterm/reject', requireRoleLevel(3), async (req, res) => {
+router.post('/longterm/reject', adminAuth, async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const device = await Device.findOneAndUpdate(
@@ -596,7 +596,7 @@ router.get('/history/check-retention', adminAuth, async (req, res) => {
 });
 
 // 2년 초과 데이터 익스포트 및 삭제 (관리자용)
-router.post('/history/export-retention', adminAuth, async (req, res) => {
+router.post('/history/export-retention', masterAdminAuth, async (req, res) => {
   try {
     const decoded = jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET);
     const user = await User.findOne({ id: decoded.id });
@@ -875,7 +875,7 @@ router.post('/manage/register', adminAuth, async (req, res) => {
   }
 });
 
-router.post('/manage/delete', adminAuth, async (req, res) => {
+router.post('/manage/delete', masterAdminAuth, async (req, res) => {
   const { serialNumber } = req.body;
   try {
     const device = await Device.findOneAndDelete({ serialNumber, rentedBy: null, pendingExternalRentalBy: null });
@@ -966,7 +966,7 @@ router.post('/manage/update-details', adminAuth, async (req, res) => {
   }
 });
 
-router.post('/manage/update-status', async (req, res) => {
+router.post('/manage/update-status', adminAuth, async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: "No token provided" });
 
@@ -979,6 +979,9 @@ router.post('/manage/update-status', async (req, res) => {
     const normalizedStatus = status ? status.toLowerCase() : '';
     if (!validStatuses.includes(normalizedStatus)) {
       return res.status(400).json({ message: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
+    }
+    if (normalizedStatus === 'inactive' && req.user.roleLevel > 0) {
+      return res.status(403).json({ message: '디바이스 비활성화는 마스터 관리자만 가능합니다.' });
     }
 
     const device = await Device.findOne({ serialNumber });

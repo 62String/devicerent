@@ -264,34 +264,33 @@ http://<서버IP>:3000
 2. 관리자 후보 계정 가입 신청
 3. MongoDB에서 계정 권한 수정
 
-예시: 특정 계정을 실장급 관리자로 승격
+예시: 특정 계정을 마스터 관리자로 승격
 
 ```powershell
-docker exec -it mongo mongosh devicerental --eval "db.users.updateOne({ id: '<아이디>' }, { $set: { isPending: false, isAdmin: true, position: '실장', roleLevel: 2 } })"
+docker exec -it mongo mongosh devicerental --eval "db.users.updateOne({ id: '<아이디>' }, { $set: { isPending: false, isAdmin: true, roleLevel: 0 } })"
 ```
 
-예시: `yya007`을 연구원 직급으로 유지하되 관리자 권한만 부여
+예시: 특정 계정을 운영 관리자로 승격
 
 ```powershell
-docker exec -it mongo mongosh devicerental --eval "db.users.updateOne({ id: 'yya007' }, { $set: { isPending: false, isAdmin: true, position: '연구원', roleLevel: 2 } })"
+docker exec -it mongo mongosh devicerental --eval "db.users.updateOne({ id: '<아이디>' }, { $set: { isPending: false, isAdmin: true, roleLevel: 1 } })"
 ```
 
 권한 기준:
 
 | roleLevel | 의미 |
 |---|---|
-| 1 | 센터장 |
-| 2 | 실장급 |
-| 3 | 팀장급 |
-| 4 | 파트장 |
-| 5 | 연구원 |
+| 0 | 마스터 관리자. 전체 권한, 삭제/폐쇄 가능 |
+| 1 | 운영 관리자. 디바이스 추가, 상태 변경, 가입 승인, 업무 승인 가능. 삭제/비활성화 불가 |
+| 2 | 조회 관리자. 대시보드 확인 가능 |
+| 99 | 일반 사용자 |
 
-현재 프론트/백엔드는 `roleLevel <= 3`이면 승인 대기 접근 권한을 가진다.
+현재 프론트/백엔드는 직급이 아니라 `roleLevel` 관리레벨 기준으로 권한을 판단한다.
 
 ### 10.2 DB에서 사용자 확인
 
 ```powershell
-docker exec -it mongo mongosh devicerental --eval "db.users.find({}, { id: 1, name: 1, affiliation: 1, position: 1, roleLevel: 1, isAdmin: 1, isPending: 1, authProvider: 1, email: 1 }).sort({ name: 1 }).toArray()"
+docker exec -it mongo mongosh devicerental --eval "db.users.find({}, { id: 1, name: 1, affiliation: 1, roleLevel: 1, isAdmin: 1, isPending: 1, authProvider: 1, email: 1 }).sort({ name: 1 }).toArray()"
 ```
 
 ---

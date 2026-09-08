@@ -34,8 +34,8 @@ afterAll(async () => {
 beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
   const users = mongoose.connection.db.collection('users');
-  await users.insertOne({ id: 'admin-id', name: 'Admin', affiliation: 'QA', position: '팀장', password: 'x', isPending: false, isAdmin: true, roleLevel: 3 });
-  await users.insertOne({ id: 'user-id', name: 'User', affiliation: 'QA', position: '연구원', password: 'x', isPending: false, isAdmin: false, roleLevel: 5 });
+  await users.insertOne({ id: 'admin-id', name: 'Admin', affiliation: 'QA', position: '연구원', password: 'x', isPending: false, isAdmin: true, roleLevel: 2 });
+  await users.insertOne({ id: 'user-id', name: 'User', affiliation: 'QA', position: '연구원', password: 'x', isPending: false, isAdmin: false, roleLevel: 99 });
 
   const now = Date.now();
   await Device.create([
@@ -74,7 +74,7 @@ describe('GET /api/devices/dashboard', () => {
   it('비관리자(연구원)면 403', async () => {
     const res = await request(app).get('/api/devices/dashboard').set('Authorization', 'Bearer user-token');
     expect(res.status).toBe(403);
-    expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+    expect(res.body.message).toBe('대시보드 조회 권한이 필요합니다.');
   });
 
   it('관리자면 200 + 집계 정확 (승인/미승인 장기대여 구분)', async () => {

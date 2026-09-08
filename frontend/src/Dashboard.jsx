@@ -4,11 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './utils/AuthContext';
 import { getApiUrl } from './utils/api';
 import { AlertTriangleIcon, PlaneIcon, CheckCircleIcon, ClockIcon } from './components/Icons';
-
-const isTeamLeadOrAbove = (u) => {
-  if (Number(u?.roleLevel) <= 3) return true;
-  return ['팀장', '실장', '센터장'].includes(u?.position);
-};
+import { canOperateAdmin } from './utils/permissions';
 
 const formatElapsed = (hours) => {
   if (hours == null) return '—';
@@ -79,7 +75,7 @@ function Dashboard() {
   const overdueList = rentedDevices.filter(d => d.overdue);
   const approvedList = rentedDevices.filter(d => ['external', 'longterm'].includes(d.rentalType) && d.longTermStatus === 'approved');
   const totalOs = Object.values(osDistribution).reduce((a, b) => a + b, 0) || 1;
-  const teamLead = isTeamLeadOrAbove(user);
+  const canApprove = canOperateAdmin(user);
 
   const STATUS_LABEL = {
     active: '활성',
@@ -117,9 +113,9 @@ function Dashboard() {
           <div className="alert alert-warn flex items-center gap-2.5" style={{ marginBottom: 14 }}>
             <ClockIcon size={16} />
             <span className="flex-1 text-[12px]">
-              <b>외부대여 승인 대기 {counts.pendingApproval}건</b> — 팀장 이상 검토가 필요합니다.
+              <b>외부대여 승인 대기 {counts.pendingApproval}건</b> - 운영관리자 이상 검토가 필요합니다.
             </span>
-            {teamLead && (
+            {canApprove && (
               <button className="btn btn-sm" style={{ background: 'var(--warn-text)', color: 'var(--surface)' }} onClick={() => navigate('/longterm/approvals')}>
                 승인 대기 보기 →
               </button>

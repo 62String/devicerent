@@ -4,6 +4,7 @@ import { isMobile } from 'react-device-detect';
 import { useAuth } from '../../utils/AuthContext';
 import { getTheme, toggleTheme } from '../../utils/theme';
 import { DeviceIcon, MoonIcon, SunIcon, LogoutIcon } from '../../components/Icons';
+import { canOperateAdmin, canViewDashboard } from '../../utils/permissions';
 
 function ThemeToggle() {
   const [theme, setTheme] = useState(getTheme());
@@ -20,11 +21,6 @@ function ThemeToggle() {
     </button>
   );
 }
-
-const isTeamLeadOrAbove = (u) => {
-  if (Number(u?.roleLevel) <= 3) return true;
-  return ['팀장', '실장', '센터장'].includes(u?.position);
-};
 
 function Navbar() {
   const { user, logout } = useAuth();
@@ -67,19 +63,19 @@ function Navbar() {
       <NavLink to="/devices" end className={navLinkClass}>대여하기</NavLink>
       <NavLink to="/devices/status" className={navLinkClass}>대여 현황</NavLink>
       <NavLink to="/devices/history" className={navLinkClass}>대여 히스토리</NavLink>
-      {user?.isAdmin && (
+      {canViewDashboard(user) && (
         <NavLink to="/dashboard" className={navLinkClass}>대시보드</NavLink>
       )}
-      {isTeamLeadOrAbove(user) && (
+      {canOperateAdmin(user) && (
         <NavLink to="/longterm/approvals" className={navLinkClass}>승인 대기</NavLink>
       )}
-      {user?.isAdmin && (
+      {canOperateAdmin(user) && (
         <NavLink to="/admin" className={navLinkClass}>관리자</NavLink>
       )}
       <div className="ml-auto flex items-center gap-2">
         {user && (
           <span className="text-[13px] text-sub mr-1">
-            {user.affiliation} <span className="font-medium text-ink">{user.name}</span> {user.position}
+            <span className="font-medium text-ink">{user.name}</span>님
           </span>
         )}
         <ThemeToggle />

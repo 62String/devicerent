@@ -2,6 +2,7 @@ const request = require('supertest');
   const express = require('express');
   const User = require('../../../models/User');
   const DeletedUser = require('../../../models/DeletedUser');
+  const UserRoleChangeLog = require('../../../models/UserRoleChangeLog');
   const mongoose = require('mongoose');
   const { MongoMemoryServer } = require('mongodb-memory-server');
   const jwt = require('jsonwebtoken');
@@ -38,6 +39,7 @@ const request = require('supertest');
     beforeEach(async () => {
       await User.deleteMany({});
       await DeletedUser.deleteMany({});
+      await UserRoleChangeLog.deleteMany({});
       await User.create({
         id: 'admin-id',
         name: 'Admin User',
@@ -46,7 +48,7 @@ const request = require('supertest');
         password: 'adminpassword',
         isPending: false,
         isAdmin: true,
-        roleLevel: 1
+        roleLevel: 0
       });
       await User.create({
         id: 'pending-user',
@@ -56,7 +58,7 @@ const request = require('supertest');
         password: 'testpassword',
         isPending: true,
         isAdmin: false,
-        roleLevel: 5
+        roleLevel: 99
       });
       await User.create({
         id: 'approved-user',
@@ -66,7 +68,7 @@ const request = require('supertest');
         password: 'testpassword',
         isPending: false,
         isAdmin: false,
-        roleLevel: 5
+        roleLevel: 99
       });
     }, 10000);
 
@@ -77,7 +79,7 @@ const request = require('supertest');
           .set('Authorization', `Bearer ${userToken}`);
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
       }, 10000);
 
       it('should return pending users', async () => {
@@ -90,8 +92,7 @@ const request = require('supertest');
         expect(res.body.users[0]).toEqual({
           id: 'pending-user',
           name: 'Pending User',
-          affiliation: 'Test Org',
-          position: '연구원'
+          affiliation: 'Test Org'
         });
       }, 10000);
 
@@ -113,7 +114,7 @@ const request = require('supertest');
           .set('Authorization', `Bearer ${userToken}`);
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
       }, 10000);
 
       it('should return approved users', async () => {
@@ -127,17 +128,15 @@ const request = require('supertest');
           id: 'admin-id',
           name: 'Admin User',
           affiliation: 'Admin Org',
-          position: '센터장',
           isAdmin: true,
-          roleLevel: 1
+          roleLevel: 0
         });
         expect(res.body.users).toContainEqual({
           id: 'approved-user',
           name: 'Approved User',
           affiliation: 'Test Org',
-          position: '연구원',
           isAdmin: false,
-          roleLevel: 5
+          roleLevel: 99
         });
       }, 10000);
 
@@ -150,7 +149,8 @@ const request = require('supertest');
           position: '센터장',
           password: 'adminpassword',
           isPending: false,
-          isAdmin: true
+          isAdmin: true,
+          roleLevel: 0
         });
         const admin = await User.findOne({ id: 'admin-id' });
         expect(admin).toBeTruthy(); // 관리자 생성 확인
@@ -172,7 +172,7 @@ const request = require('supertest');
           .send({ id: 'pending-user' });
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
       }, 10000);
 
       it('should fail if user not found', async () => {
@@ -199,6 +199,60 @@ const request = require('supertest');
       }, 10000);
     });
 
+    describe('POST /api/admin/users/role-level', () => {
+      it('should update a user role level and record the change', async () => {
+        const res = await request(app)
+          .post('/api/admin/users/role-level')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ id: 'approved-user', roleLevel: 1, reason: '운영 담당자 지정' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.user).toMatchObject({ id: 'approved-user', roleLevel: 1, isAdmin: true });
+
+        const user = await User.findOne({ id: 'approved-user' });
+        expect(user.roleLevel).toBe(1);
+        expect(user.isAdmin).toBe(true);
+
+        const log = await UserRoleChangeLog.findOne({ targetUserId: 'approved-user' });
+        expect(log).toMatchObject({
+          previousRoleLevel: 99,
+          newRoleLevel: 1,
+          reason: '운영 담당자 지정',
+          performedBy: 'admin-id'
+        });
+      }, 10000);
+
+      it('should reject changing the current administrator role level', async () => {
+        const res = await request(app)
+          .post('/api/admin/users/role-level')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ id: 'admin-id', roleLevel: 1 });
+
+        expect(res.status).toBe(403);
+        expect(res.body.message).toBe('본인의 관리레벨은 변경할 수 없습니다.');
+      }, 10000);
+
+      it('should reject an unsupported role level', async () => {
+        const res = await request(app)
+          .post('/api/admin/users/role-level')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ id: 'approved-user', roleLevel: 3 });
+
+        expect(res.status).toBe(400);
+        expect(res.body.message).toBe('유효한 사용자와 관리레벨을 선택해주세요.');
+      }, 10000);
+
+      it('should reject a non-master user', async () => {
+        const res = await request(app)
+          .post('/api/admin/users/role-level')
+          .set('Authorization', `Bearer ${userToken}`)
+          .send({ id: 'approved-user', roleLevel: 1 });
+
+        expect(res.status).toBe(403);
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
+      }, 10000);
+    });
+
     describe('POST /api/admin/users/reject', () => {
       it('should fail if not admin', async () => {
         const res = await request(app)
@@ -207,7 +261,7 @@ const request = require('supertest');
           .send({ id: 'pending-user', reason: 'Test rejection' });
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
       }, 10000);
 
       it('should fail if user not found', async () => {
@@ -246,7 +300,7 @@ const request = require('supertest');
           .send({ id: 'approved-user', reason: 'Test deletion' });
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('관리자 권한이 필요합니다.');
+        expect(res.body.message).toBe('승인된 사용자만 가능합니다.');
       }, 10000);
 
       it('should fail if user not found', async () => {
@@ -274,15 +328,16 @@ const request = require('supertest');
           id: 'higher-user',
           name: 'Higher User',
           affiliation: 'Test Org',
-          position: '센터장', // roleLevel: 1로 설정됨
+          position: '센터장',
           password: 'testpassword',
           isPending: false,
-          isAdmin: true
+          isAdmin: true,
+          roleLevel: 0
         });
 
         const higherUser = await User.findOne({ id: 'higher-user' });
         expect(higherUser).toBeTruthy(); // higher-user 생성 확인
-        expect(higherUser.roleLevel).toBe(1); // roleLevel 확인
+        expect(higherUser.roleLevel).toBe(0); // roleLevel 확인
 
         const res = await request(app)
           .post('/api/admin/users/delete')
@@ -290,7 +345,7 @@ const request = require('supertest');
           .send({ id: 'higher-user', reason: 'Test deletion' });
 
         expect(res.status).toBe(403);
-        expect(res.body.message).toBe('상위 또는 동일 직급은 삭제할 수 없습니다.');
+        expect(res.body.message).toBe('상위 또는 동일 관리레벨은 삭제할 수 없습니다.');
       }, 10000);
 
       it('should delete a user and save to DeletedUser', async () => {

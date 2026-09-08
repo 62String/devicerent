@@ -6,7 +6,7 @@ const xlsx = require('xlsx');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET, ALLOWED_ORIGINS, isAllowedOrigin } = require('./config');
 const { verifyToken } = require('./utils/auth');
-const { adminAuth } = require('./routes/middleware');
+const { adminAuth, masterAdminAuth } = require('./routes/middleware');
 const RentalHistory = require('./models/RentalHistory');
 const ExportHistory = require('./models/ExportHistory');
 const DeviceChangeLog = require('./models/DeviceChangeLog');
@@ -451,6 +451,9 @@ app.post('/api/admin/upload-devices', adminAuth, excelUpload.single('excelFile')
   try {
     if (!req.file) return res.status(400).json({ message: '엑셀 파일을 선택해주세요.' });
     const force = req.body.force === 'true';
+    if (force && req.user.roleLevel > 0) {
+      return res.status(403).json({ message: '엑셀 강제 초기화는 마스터 관리자만 가능합니다.' });
+    }
     const result = await initDevices(force, req.file.path);
     await DeviceChangeLog.create({
       serialNumber: 'SYSTEM',
@@ -495,7 +498,7 @@ app.post('/api/admin/init-devices', adminAuth, async (req, res) => {
   }
 });
 
-app.post('/api/admin/clear-invalid-devices', adminAuth, async (req, res) => {
+app.post('/api/admin/clear-invalid-devices', masterAdminAuth, async (req, res) => {
   try {
     const { exportPath } = req.body;
     const devices = await Device.find();
@@ -710,10 +713,9 @@ app.get('/api/me', async (req, res) => {
         id: user.id,
         name: user.name,
         affiliation: user.affiliation,
-        position: user.position,
-        roleLevel: user.roleLevel || 5,
+        roleLevel: Number.isFinite(Number(user.roleLevel)) ? Number(user.roleLevel) : 99,
         isPending: user.isPending || false,
-        isAdmin: user.isAdmin || false,
+        isAdmin: Number(user.roleLevel) <= 2,
         authProvider: user.authProvider || 'local',
         email: user.email || '',
       },

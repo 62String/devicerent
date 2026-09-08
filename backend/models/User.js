@@ -15,8 +15,9 @@ const UserSchema = new Schema({
   authProvider: { type: String, enum: ['local', 'microsoft'], default: 'local' },
   microsoftOid: { type: String, default: '', index: true },
   email: { type: String, default: '' },
-  position: { type: String, required: true, enum: ['연구원', '파트장', '팀장', '실장', '센터장'] },
-  roleLevel: { type: Number, default: 5 },
+  position: { type: String, default: '연구원', enum: ['연구원', '파트장', '팀장', '실장', '센터장'] },
+  // 관리레벨: 0(마스터 관리자) / 1(운영 관리자) / 2(대시보드 조회) / 99(일반 사용자)
+  roleLevel: { type: Number, default: 99 },
   isPending: { type: Boolean, default: true },
   isAdmin: { type: Boolean, default: false }
 });
@@ -30,21 +31,8 @@ UserSchema.pre('save', async function(next) {
     user.password = await bcrypt.hash(user.password, salt);
   }
 
-  // 직급에 따라 권한 레벨 설정 (역순)
-  if (user.isModified('position')) {
-    if (user.position === '센터장') user.roleLevel = 1;
-    else if (user.position === '실장') user.roleLevel = 2;
-    else if (user.position === '팀장') user.roleLevel = 3;
-    else if (user.position === '파트장') user.roleLevel = 4;
-    else if (user.position === '연구원') user.roleLevel = 5;
-  }
-
-  // 파트장 이상 직급에 대해 isAdmin: true 설정
-  if (['파트장', '팀장', '실장', '센터장'].includes(this.position)) {
-    this.isAdmin = true;
-  } else {
-    this.isAdmin = false;
-  }
+  // 직급은 표시/인사 정보로만 보관하고, 권한은 관리레벨만 기준으로 판단한다.
+  this.isAdmin = Number(this.roleLevel) <= 2;
 
   next();
 });

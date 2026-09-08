@@ -116,7 +116,6 @@ function PendingUsersPage() {
                     <th>아이디</th>
                     <th>이름</th>
                     <th>소속</th>
-                    <th>직급</th>
                     <th style={{ width: 140 }}></th>
                   </tr>
                 </thead>
@@ -126,7 +125,6 @@ function PendingUsersPage() {
                       <td className="td-mono">{u.id}</td>
                       <td className="cell-main">{u.name || 'N/A'}</td>
                       <td className="td-sub">{u.affiliation || 'N/A'}</td>
-                      <td className="td-sub">{u.position || 'N/A'}</td>
                       <td className="text-right">
                         <div className="flex gap-1.5 justify-end">
                           <button onClick={() => openApproveModal(u.id)} className="btn btn-primary btn-sm">승인</button>

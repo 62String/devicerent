@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useAuth } from '../../utils/AuthContext'; // 상위 경로로 이동
 import useSync from '../hooks/useSync';
 import Popup from '../components/Popup';
+import { canOperateAdmin } from '../../utils/permissions';
 
 function SyncPage() {
   const { user } = useAuth();
   const { syncData, isPopupOpen, error, setIsPopupOpen } = useSync();
   const [loading, setLoading] = useState(false); // 로딩 상태 추가
 
-  if (!user || !user.isAdmin) {
+  if (!user || !canOperateAdmin(user)) {
     return <p>관리자 권한이 필요합니다.</p>;
   }
 

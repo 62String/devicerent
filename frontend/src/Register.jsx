@@ -200,36 +200,17 @@ function Register() {
               />
               {fieldError('name')}
 
-              <div className="flex gap-2 mt-3">
-                <div className="flex-1">
-                  <label className="field-label" htmlFor="reg-affiliation">소속</label>
-                  <input
-                    id="reg-affiliation"
-                    type="text"
-                    name="affiliation"
-                    value={formData.affiliation}
-                    onChange={handleChange}
-                    placeholder="예) QA 2팀"
-                    required
-                    className="input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="field-label" htmlFor="reg-position">직급</label>
-                  <select
-                    id="reg-position"
-                    name="position"
-                    value={formData.position}
-                    onChange={handleChange}
-                    required
-                    className="input"
-                  >
-                    <option value="연구원">연구원</option>
-                    <option value="파트장">파트장</option>
-                    <option value="팀장">팀장</option>
-                  </select>
-                </div>
-              </div>
+              <label className="field-label mt-3" htmlFor="reg-affiliation">소속</label>
+              <input
+                id="reg-affiliation"
+                type="text"
+                name="affiliation"
+                value={formData.affiliation}
+                onChange={handleChange}
+                placeholder="예) QA 2팀"
+                required
+                className="input w-full"
+              />
               {fieldError('affiliation')}
 
               <button

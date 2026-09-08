@@ -20,6 +20,7 @@ import NotFound from './NotFound';
 import MobileDeviceStatus from './mobile/MobileDeviceStatus';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import Navbar from './admin/components/Navbar';
+import { getAdminLevel } from './utils/permissions';
 
 // ErrorBoundary 클래스 (기존 유지)
 class ErrorBoundary extends Component {
@@ -54,13 +55,8 @@ class ErrorBoundary extends Component {
   }
 }
 
-const isTeamLeadOrAbove = (u) => {
-  if (Number(u?.roleLevel) <= 3) return true;
-  return ['팀장', '실장', '센터장'].includes(u?.position);
-};
-
 // ProtectedRoute 컴포넌트
-const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isMobile }) => {
+const ProtectedRoute = ({ element, requiredAdminLevel = null, isMobile }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,7 +64,7 @@ const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isM
   if (process.env.NODE_ENV === 'development') {
     console.log('ProtectedRoute user:', user);
     console.log('ProtectedRoute loading:', loading);
-    console.log('ProtectedRoute isAdmin required:', isAdmin);
+    console.log('ProtectedRoute requiredAdminLevel:', requiredAdminLevel);
     console.log('ProtectedRoute isMobile:', isMobile);
     console.log('ProtectedRoute current path:', location.pathname);
   }
@@ -95,18 +91,13 @@ const ProtectedRoute = ({ element, isAdmin = false, requireTeamLead = false, isM
     return <Navigate to={isMobile ? "/mobile/login" : "/login"} replace />;
   }
 
-  // 관리자 권한 확인
-  if (isAdmin && !user.isAdmin) {
+  // 관리레벨 확인: 0 마스터 / 1 운영 / 2 대시보드 / 99 일반
+  if (requiredAdminLevel !== null && getAdminLevel(user) > requiredAdminLevel) {
     const redirectPath = isMobile ? "/mobile/rent" : "/devices";
     if (process.env.NODE_ENV === 'development') {
-      console.log(`ProtectedRoute: Redirecting to ${redirectPath} due to not admin`);
+      console.log(`ProtectedRoute: Redirecting to ${redirectPath} due to insufficient admin level`);
     }
     return <Navigate to={redirectPath} replace />;
-  }
-
-  // 팀장 이상 권한 확인 (외부대여 승인 등)
-  if (requireTeamLead && !isTeamLeadOrAbove(user)) {
-    return <Navigate to={isMobile ? "/mobile/rent" : "/devices"} replace />;
   }
 
   // 모바일 디바이스 → 경로 제한
@@ -205,7 +196,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<AdminPage />}
-                  isAdmin={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }
@@ -215,7 +206,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<UsersPage />}
-                  isAdmin={true}
+                  requiredAdminLevel={0}
                   isMobile={isMobile}
                 />
               }
@@ -225,7 +216,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<PendingUsersPage />}
-                  isAdmin={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }
@@ -235,7 +226,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<ExportHistory />}
-                  isAdmin={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }
@@ -245,7 +236,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<Dashboard />}
-                  isAdmin={true}
+                  requiredAdminLevel={2}
                   isMobile={isMobile}
                 />
               }
@@ -255,7 +246,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<LongTermApproval />}
-                  requireTeamLead={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }
@@ -292,7 +283,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<DeviceManage />}
-                  isAdmin={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }
@@ -302,7 +293,7 @@ function AppContent() {
               element={
                 <ProtectedRoute
                   element={<DeviceChangeRequests />}
-                  isAdmin={true}
+                  requiredAdminLevel={1}
                   isMobile={isMobile}
                 />
               }

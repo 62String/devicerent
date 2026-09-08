@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import { getApiUrl } from '../../utils/api';
 import { DownloadIcon } from '../../components/Icons';
+import { canOperateAdmin, isMasterAdmin } from '../../utils/permissions';
 
 function AdminPage() {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ function AdminPage() {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (!user?.isAdmin) {
+    if (!canOperateAdmin(user)) {
       navigate('/devices');
     }
   }, [user, navigate]);
@@ -79,12 +80,12 @@ function AdminPage() {
   }, [token, lastRetentionCheck]);
 
   const menuItems = [
-    { title: '사용자 목록', desc: '전체 사용자 조회 · 권한 관리', path: '/admin/users' },
+    { title: '사용자 목록', desc: '전체 사용자 조회 · 권한 관리', path: '/admin/users', masterOnly: true },
     { title: '가입 승인 대기', desc: '가입 신청 승인 / 거절', path: '/admin/pending' },
     { title: '업무 승인 대기', desc: '외부대여 · 디바이스 제보 검토', path: '/longterm/approvals' },
     { title: '디바이스 관리', desc: '디바이스 등록 · 상태 관리', path: '/devices/manage' },
     { title: '익스포트 내역', desc: '엑셀 익스포트 기록 조회', path: '/admin/export-history' },
-  ];
+  ].filter(item => !item.masterOnly || isMasterAdmin(user));
 
   const isInfo = message === '2년 초과 데이터가 없습니다.';
 
@@ -117,10 +118,12 @@ function AdminPage() {
               <div className={`alert ${isInfo ? 'alert-success' : 'alert-error'}`}>{message}</div>
             )}
             <div className="flex items-center gap-3 flex-wrap">
-              <button onClick={handleRetentionExport} className="btn btn-ink">
-                <DownloadIcon size={14} />
-                2년 초과 데이터 수동 익스포트
-              </button>
+              {isMasterAdmin(user) && (
+                <button onClick={handleRetentionExport} className="btn btn-ink">
+                  <DownloadIcon size={14} />
+                  2년 초과 데이터 수동 익스포트
+                </button>
+              )}
               {downloadLink && (
                 <a href={downloadLink} download className="link text-sm">익스포트된 파일 다운로드</a>
               )}

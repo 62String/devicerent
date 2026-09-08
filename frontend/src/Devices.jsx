@@ -5,6 +5,7 @@ import { useAuth } from './utils/AuthContext';
 import { getApiUrl } from './utils/api';
 import { SearchIcon, XIcon } from './components/Icons';
 import DeviceDetailsModal from './components/DeviceDetailsModal';
+import { canOperateAdmin } from './utils/permissions';
 
 const formatOs = (osName, osVersion) => {
   if (!osName && !osVersion) return 'N/A';
@@ -535,7 +536,7 @@ function Devices() {
             <h1 className="page-title">디바이스 대여</h1>
             <p className="page-sub">전체 디바이스를 검색하고 상태별로 바로 확인하세요</p>
           </div>
-          {user?.isAdmin && (
+          {canOperateAdmin(user) && (
             <div className="flex gap-2">
               <button className="btn btn-outline btn-sm" onClick={() => navigate('/admin')}>관리자 페이지</button>
               <button className="btn btn-outline btn-sm" onClick={() => navigate('/devices/manage')}>디바이스 관리</button>
