@@ -37,7 +37,6 @@ const sortHistoryPairs = (pairs, sortBy = 'rentTime', sortOrder = 'desc') => [..
 
 function DeviceHistory() {
   const [historyPairs, setHistoryPairs] = useState([]);
-  const [originalPairs, setOriginalPairs] = useState([]);
   const [devices, setDevices] = useState([]);
   const [searchSerial, setSearchSerial] = useState('');
   const [error, setError] = useState(null);
@@ -48,6 +47,10 @@ function DeviceHistory() {
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [sortBy, setSortBy] = useState('rentTime');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [appliedSearch, setAppliedSearch] = useState({
+    searchSerial: '', selectedPeriod: 'all', customDateRange: { start: '', end: '' },
+    sortBy: 'rentTime', sortOrder: 'desc',
+  });
   const [perPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const token = localStorage.getItem('token');
@@ -80,6 +83,7 @@ function DeviceHistory() {
     let isMounted = true;
 
     const fetchData = async () => {
+      const { searchSerial, selectedPeriod, customDateRange, sortBy, sortOrder } = appliedSearch;
       try {
         let url = `${apiUrl}/api/devices/history`;
         if (selectedPeriod === 'custom' && customDateRange.start && customDateRange.end) {
@@ -174,8 +178,14 @@ function DeviceHistory() {
 
         const sortedPairs = sortHistoryPairs(pairs, sortBy, sortOrder);
 
-        setHistoryPairs(sortedPairs);
-        setOriginalPairs(sortedPairs);
+        if (isMounted) {
+          const query = searchSerial.trim().toLowerCase();
+          setHistoryPairs(sortedPairs.filter(pair =>
+            !query || String(pair.serialNumber || '').toLowerCase().includes(query)
+          ));
+          setCurrentPage(1);
+          setError(null);
+        }
       } catch (err) {
         if (isMounted) {
           setError('데이터를 불러오지 못했습니다. 서버를 확인해 주세요.');
@@ -188,34 +198,26 @@ function DeviceHistory() {
     return () => {
       isMounted = false;
     };
-  }, [token, selectedPeriod, customDateRange, devices, sortBy, sortOrder]);
+  }, [token, appliedSearch, devices]);
 
-  const handleSearch = (value) => {
-    setSearchSerial(value);
-    const trimmedSearch = value.trim();
-    if (!trimmedSearch) {
-      setHistoryPairs(sortHistoryPairs(originalPairs, sortBy, sortOrder));
-      setCurrentPage(1);
+  const handleSearch = () => {
+    if (selectedPeriod === 'custom' && (!customDateRange.start || !customDateRange.end)) {
+      setError('검색할 시작 날짜와 종료 날짜를 모두 선택해주세요.');
       return;
     }
-    const filtered = originalPairs.filter(pair =>
-      pair.serialNumber.toLowerCase().includes(trimmedSearch.toLowerCase())
-    );
-    setHistoryPairs(sortHistoryPairs(filtered, sortBy, sortOrder));
-    setCurrentPage(1);
-  };
-
-  const handleReset = () => {
-    setSearchSerial('');
-    setSelectedPeriod('all');
-    setCustomDateRange({ start: '', end: '' });
-    setSortBy('rentTime');
-    setSortOrder('desc');
-    setHistoryPairs(sortHistoryPairs(originalPairs, 'rentTime', 'desc'));
-    setCurrentPage(1);
+    if (selectedPeriod === 'custom' && customDateRange.start > customDateRange.end) {
+      setError('종료 날짜는 시작 날짜보다 빠를 수 없습니다.');
+      return;
+    }
+    setError(null);
+    setAppliedSearch({
+      searchSerial: searchSerial.trim(), selectedPeriod,
+      customDateRange: { ...customDateRange }, sortBy, sortOrder,
+    });
   };
 
   const handleExport = async () => {
+    const { selectedPeriod, customDateRange } = appliedSearch;
     let payload = {};
     if (selectedPeriod === 'custom' && customDateRange.start && customDateRange.end) {
       payload = { startDate: customDateRange.start, endDate: customDateRange.end };
@@ -294,7 +296,7 @@ function DeviceHistory() {
             <input
               type="text"
               value={searchSerial}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={(e) => setSearchSerial(e.target.value)}
               placeholder="시리얼 번호 검색"
               className="input w-full pl-9"
             />
@@ -318,7 +320,6 @@ function DeviceHistory() {
             value={sortBy}
             onChange={(e) => {
               setSortBy(e.target.value);
-              setCurrentPage(1);
             }}
             className="input"
             aria-label="정렬 기준"
@@ -330,7 +331,6 @@ function DeviceHistory() {
             value={sortOrder}
             onChange={(e) => {
               setSortOrder(e.target.value);
-              setCurrentPage(1);
             }}
             className="input"
             aria-label="정렬 방향"
@@ -342,7 +342,7 @@ function DeviceHistory() {
             <div className="flex items-center gap-2">
               <DatePicker
                 selected={customDateRange.start ? new Date(customDateRange.start) : null}
-                onChange={date => setCustomDateRange({ ...customDateRange, start: date.toISOString().split('T')[0] })}
+                onChange={date => setCustomDateRange({ ...customDateRange, start: date ? date.toLocaleDateString('sv-SE') : '' })}
                 selectsStart
                 startDate={customDateRange.start ? new Date(customDateRange.start) : null}
                 endDate={customDateRange.end ? new Date(customDateRange.end) : null}
@@ -355,7 +355,7 @@ function DeviceHistory() {
               <span className="text-hint">~</span>
               <DatePicker
                 selected={customDateRange.end ? new Date(customDateRange.end) : null}
-                onChange={date => setCustomDateRange({ ...customDateRange, end: date.toISOString().split('T')[0] })}
+                onChange={date => setCustomDateRange({ ...customDateRange, end: date ? date.toLocaleDateString('sv-SE') : '' })}
                 selectsEnd
                 startDate={customDateRange.start ? new Date(customDateRange.start) : null}
                 endDate={customDateRange.end ? new Date(customDateRange.end) : null}
@@ -367,7 +367,7 @@ function DeviceHistory() {
               />
             </div>
           )}
-          <button onClick={handleReset} className="btn btn-outline">초기화</button>
+          <button type="button" onClick={handleSearch} className="btn btn-ink" style={{ backgroundColor: '#000', color: '#fff' }}>검색</button>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -385,25 +385,13 @@ function DeviceHistory() {
                     <th style={{ width: 90 }}>대여자</th>
                     <th
                       style={{ width: 130 }}
-                      className="cursor-pointer select-none"
-                      onClick={() => {
-                        setSortBy('rentTime');
-                        setSortOrder(sortBy === 'rentTime' && sortOrder === 'desc' ? 'asc' : 'desc');
-                        setCurrentPage(1);
-                      }}
                     >
-                      대여 시간{sortBy === 'rentTime' ? (sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
+                      대여 시간{appliedSearch.sortBy === 'rentTime' ? (appliedSearch.sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
                     </th>
                     <th
                       style={{ width: 130 }}
-                      className="cursor-pointer select-none"
-                      onClick={() => {
-                        setSortBy('returnTime');
-                        setSortOrder(sortBy === 'returnTime' && sortOrder === 'desc' ? 'asc' : 'desc');
-                        setCurrentPage(1);
-                      }}
                     >
-                      반납 시간{sortBy === 'returnTime' ? (sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
+                      반납 시간{appliedSearch.sortBy === 'returnTime' ? (appliedSearch.sortOrder === 'desc' ? ' ↓' : ' ↑') : ''}
                     </th>
                     <th style={{ width: 70 }}>상태</th>
                     <th style={{ width: 100 }}>대여 유형</th>
