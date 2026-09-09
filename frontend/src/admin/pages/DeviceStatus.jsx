@@ -152,7 +152,6 @@ const DeviceStatus = () => {
     setSelectedSerial('');
   };
 
-  const availableCount = allDevices.filter(device => !device.rentedBy).length;
   const rentedCount = allDevices.filter(device => device.rentedBy).length;
   const myCount = allDevices.filter(device => device.rentedBy?.name === user?.name).length;
   const normalRentCount = devices.filter(device => getRentalType(device) === 'normal').length;
@@ -177,10 +176,6 @@ const DeviceStatus = () => {
             <div className="stat-card-label">전체</div>
             <div className="stat-card-value">{allDevices.length}</div>
           </button>
-          <div className="stat-card" style={{ borderTop: '3px solid var(--ok)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-            <div className="stat-card-label">대여 가능</div>
-            <div className="stat-card-value" style={{ color: 'var(--ok)' }}>{availableCount}</div>
-          </div>
           <div className="stat-card" style={{ borderTop: '3px solid var(--warn)', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
             <div className="stat-card-label">대여중</div>
             <div className="stat-card-value" style={{ color: 'var(--warn)' }}>{rentedCount}</div>
@@ -190,7 +185,7 @@ const DeviceStatus = () => {
             <div className="stat-card-value" style={{ color: 'var(--accent)' }}>{myCount}</div>
           </button>
           <button type="button" className="stat-card text-left" style={statCardStyle('normal')} onClick={() => handleViewFilter('normal')}>
-            <div className="stat-card-label">일반</div>
+            <div className="stat-card-label">내부대여</div>
             <div className="stat-card-value">{normalRentCount}</div>
           </button>
           <button type="button" className="stat-card text-left" style={statCardStyle('home', 'var(--ok)')} onClick={() => handleViewFilter('home')}>
@@ -198,7 +193,7 @@ const DeviceStatus = () => {
             <div className="stat-card-value" style={{ color: 'var(--ok)' }}>{homeRentCount}</div>
           </button>
           <button type="button" className="stat-card text-left" style={statCardStyle('external', 'var(--warn)')} onClick={() => handleViewFilter('external')}>
-            <div className="stat-card-label">외부</div>
+            <div className="stat-card-label">외부대여</div>
             <div className="stat-card-value" style={{ color: 'var(--warn)' }}>{externalRentCount}</div>
           </button>
         </div>
