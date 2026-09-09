@@ -18,13 +18,6 @@ function Login() {
   const themeToggleTitle = theme === 'dark' ? '라이트모드' : '다크모드';
 
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(''), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  useEffect(() => {
     let mounted = true;
     axios.get(`${apiUrl}/api/auth/microsoft/config`)
       .then((response) => {
@@ -84,7 +77,7 @@ function Login() {
             <div className="p-6">
               <h1 className="text-lg font-bold text-ink mb-1">로그인</h1>
               <p className="text-xs text-sub mb-5">디바이스 대여 시스템에 오신 것을 환영합니다</p>
-              {error && <div className="alert alert-error">{error}</div>}
+              {error && <div role="alert" className="alert alert-error">{error}</div>}
               <form onSubmit={handleLogin}>
                 <label className="field-label" htmlFor="login-id">아이디</label>
                 <input

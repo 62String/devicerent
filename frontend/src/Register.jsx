@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { DeviceIcon } from './components/Icons';
@@ -20,6 +20,8 @@ function Register() {
   const [isFormValid, setIsFormValid] = useState(false);
   const [isIdChecked, setIsIdChecked] = useState(false);
   const [idCheckMessage, setIdCheckMessage] = useState('');
+  const [isIdChecking, setIsIdChecking] = useState(false);
+  const idCheckRequest = useRef(0);
   const [touched, setTouched] = useState({});
 
   const validateId = (id) => {
@@ -65,38 +67,36 @@ function Register() {
     }));
     setTouched((prev) => ({ ...prev, [name]: true }));
     if (name === 'id') {
+      idCheckRequest.current += 1;
+      setIsIdChecking(false);
       setIsIdChecked(false);
       setIdCheckMessage('');
     }
-    setIsFormValid(validateForm());
   };
 
   const handleIdCheck = async () => {
-    if (!formData.id) {
-      setErrors((prev) => ({ ...prev, id: '아이디를 입력해주세요' }));
+    const id = formData.id.trim();
+    const request = ++idCheckRequest.current;
+    setIsIdChecked(false);
+    if (!validateId(id)) {
+      setIsIdChecking(false);
+      setIdCheckMessage(id ? '아이디는 영어, 숫자, _, -, @, .만 사용 가능, 최소 3자 이상' : '아이디를 입력해주세요.');
       return;
     }
-    if (!validateId(formData.id)) {
-      setErrors((prev) => ({ ...prev, id: '아이디는 영어, 숫자, _, -, @, .만 사용 가능, 최소 3자 이상' }));
-      return;
-    }
+    setIsIdChecking(true);
+    setIdCheckMessage('');
     try {
-      const response = await axios.post(`${apiUrl}/api/auth/check-id`, { id: formData.id });
-      if (response.data.available) {
-        setIsIdChecked(true);
-        setErrors((prev) => ({ ...prev, id: '' }));
-        setIdCheckMessage('사용 가능한 아이디입니다.');
-      } else {
-        setIsIdChecked(false);
-        setIdCheckMessage('');
-        setErrors((prev) => ({ ...prev, id: '이미 사용 중인 아이디입니다.' }));
-      }
+      const response = await axios.post(`${apiUrl}/api/auth/check-id`, { id });
+      if (request !== idCheckRequest.current) return;
+      setIsIdChecked(response.data.available === true);
+      setIdCheckMessage(response.data.message || (response.data.available
+        ? '사용 가능한 아이디입니다.' : '이미 사용 중인 아이디입니다.'));
     } catch (error) {
-      setIsIdChecked(false);
-      setIdCheckMessage('');
-      setErrors((prev) => ({ ...prev, id: '아이디 확인 중 오류가 발생했습니다.' }));
+      if (request !== idCheckRequest.current) return;
+      setIdCheckMessage(error.response?.data?.message || '아이디 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      if (request === idCheckRequest.current) setIsIdChecking(false);
     }
-    setIsFormValid(validateForm());
   };
 
   useEffect(() => {
@@ -115,7 +115,7 @@ function Register() {
     }
     setIsSubmitting(true);
     try {
-      const response = await axios.post(`${apiUrl}/api/auth/register`, formData, {
+      const response = await axios.post(`${apiUrl}/api/auth/register`, { ...formData, id: formData.id.trim() }, {
         headers: { 'Content-Type': 'application/json' }
       });
       alert(response.data.message);
@@ -155,11 +155,11 @@ function Register() {
                   required
                   className="input flex-1"
                 />
-                <button type="button" onClick={handleIdCheck} className="btn btn-outline">중복 확인</button>
+                <button type="button" onClick={handleIdCheck} disabled={isIdChecking} className="btn btn-outline">{isIdChecking ? '확인 중...' : '중복 확인'}</button>
               </div>
               {fieldError('id')}
-              {isIdChecked && idCheckMessage && (
-                <p className="text-xs mt-1 mb-0" style={{ color: 'var(--ok)' }}>{idCheckMessage}</p>
+              {idCheckMessage && (
+                <p role="status" aria-live="polite" className="text-xs mt-1 mb-0" style={{ color: isIdChecked ? 'var(--ok)' : 'var(--danger)' }}>{idCheckMessage}</p>
               )}
 
               <label className="field-label mt-3" htmlFor="reg-pw">비밀번호</label>

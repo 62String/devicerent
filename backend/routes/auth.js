@@ -21,8 +21,8 @@ router.post('/register', async (req, res) => {
   if (!name || !affiliation || !id || !password || !passwordConfirm) {
     return res.status(400).json({ message: "All fields are required" });
   }
-  if (typeof id !== 'string' || id.trim().length < 3) {
-    return res.status(400).json({ message: "ID must be at least 3 characters" });
+  if (typeof id !== 'string' || id.trim().length < 3 || !/^[a-zA-Z0-9_@.\-]+$/.test(id.trim())) {
+    return res.status(400).json({ message: '아이디는 영어, 숫자, _, -, @, .만 사용 가능하며 최소 3자 이상이어야 합니다.' });
   }
   if (typeof password !== 'string' || password.length < 6) {
     return res.status(400).json({ message: "Password must be at least 6 characters" });
@@ -47,7 +47,7 @@ router.post('/register', async (req, res) => {
     });
     await user.save();
 
-    res.status(201).json({ message: "Registration successful, pending admin approval", user: { id: id.trim(), name, affiliation } });
+    res.status(201).json({ message: "가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.", user: { id: id.trim(), name, affiliation } });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -56,12 +56,17 @@ router.post('/register', async (req, res) => {
 
 router.post('/check-id', async (req, res) => {
   const { id } = req.body;
+  if (typeof id !== 'string' || id.trim().length < 3 || !/^[a-zA-Z0-9_@.\-]+$/.test(id.trim())) {
+    return res.status(400).json({ available: false, message: '올바른 아이디를 입력해주세요. 최소 3자 이상이어야 합니다.' });
+  }
   try {
-    const existingUser = await User.findOne({ id });
+    const existingUser = await User.findOne({ id: id.trim() });
     if (existingUser) {
-      return res.json({ available: false });
+      return res.json({ available: false, message: existingUser.isPending
+        ? '이미 가입 신청된 아이디입니다. 관리자 승인 대기 중입니다.'
+        : '이미 사용 중인 아이디입니다. 로그인하거나 다른 아이디를 입력해주세요.' });
     }
-    res.json({ available: true });
+    res.json({ available: true, message: '사용 가능한 아이디입니다.' });
   } catch (error) {
     console.error('Check ID error:', error);
     res.status(500).json({ message: '서버 오류' });
@@ -79,7 +84,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: "비밀번호가 일치하지 않습니다." });
     }
     if (user.isPending) {
-      return res.status(403).json({ message: "승인 대기중" });
+      return res.status(403).json({ message: "가입 신청이 접수되었으며 관리자 승인 대기 중입니다. 승인 완료 후 로그인해주세요." });
     }
     const adminLevel = Number.isFinite(Number(user.roleLevel)) ? Number(user.roleLevel) : 99;
     const token = jwt.sign({ id: user.id, roleLevel: adminLevel }, JWT_SECRET, { expiresIn: adminLevel <= 2 ? '365d' : '1h' });
