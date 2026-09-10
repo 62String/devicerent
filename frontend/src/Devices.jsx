@@ -734,9 +734,15 @@ function Devices() {
                       <tr key={device.serialNumber} className={getDeviceRowClass(device)}>
                         <td className="td-mono">{device.serialNumber || 'N/A'}</td>
                         <td>
-                          <div className="cell-main truncate" title={device.modelName || 'N/A'}>
+                          <button
+                            type="button"
+                            className="device-name-button cell-main truncate"
+                            title={`${device.modelName || 'N/A'} 상세 정보 보기`}
+                            aria-label={`${device.modelName || device.serialNumber} 상세 정보`}
+                            onClick={() => openDetailModal(device)}
+                          >
                             {device.modelName || 'N/A'}
-                          </div>
+                          </button>
                           <div className="cell-sub">{formatOs(device.osName, device.osVersion)}</div>
                         </td>
                         <td className="td-sub truncate" title={getDeviceType(device)}>
@@ -799,14 +805,6 @@ function Devices() {
                           )}
                         </td>
                         <td className="text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            className="icon-btn mr-2"
-                            style={{ width: 28, height: 28, borderRadius: '50%', fontWeight: 700, fontFamily: 'serif' }}
-                            aria-label={`${device.serialNumber} 상세 정보`}
-                            title="상세 정보"
-                            onClick={() => openDetailModal(device)}
-                          >i</button>
                           {device.rentedBy ? (
                             isMine ? (
                               <button onClick={() => openReturnModal(device.serialNumber)} className="btn btn-accent-outline btn-sm">반납</button>
