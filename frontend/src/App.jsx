@@ -154,7 +154,8 @@ function AppContent() {
         <div>Loading...</div>
       ) : (
         <>
-          {user && location.pathname !== '/portal' && <Navbar />}
+          {user && location.pathname !== '/portal' && <Navbar isMobileView={isMobile} />}
+          <main className={user && !isMobile && location.pathname !== '/portal' ? 'device-app-content' : undefined}>
           <Routes>
             {/* 로그인 페이지 */}
             <Route
@@ -306,6 +307,7 @@ function AppContent() {
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </main>
         </>
       )}
     </ErrorBoundary>

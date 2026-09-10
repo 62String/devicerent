@@ -1,19 +1,27 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 45 920;
+  font-display: swap;
+  src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* 해부노트 디자인 토큰 — 라이트 */
 :root {
-  --paper: #F6F7F9;
+  --paper: #F1F5F9;
   --surface: #FFFFFF;
-  --ink: #1B2430;
+  --ink: #1E293B;
   --ink-contrast: #FFFFFF;
-  --sub: #5A6472;
-  --hint: #9AA3AE;
-  --line: #DDE2E8;
-  --line-soft: #EEF1F4;
-  --accent: #2F6FED;
-  --accent-soft: #E6EEFD;
+  --sub: #64748B;
+  --hint: #94A3B8;
+  --line: #CBD5E1;
+  --line-soft: #E2E8F0;
+  --accent: #2563EB;
+  --accent-soft: #EFF6FF;
   --accent-ink: #FFFFFF;
   --ok: #22875A;
   --ok-bg: #E1F5EE;
@@ -34,16 +42,16 @@
 }
 
 .dark {
-  --paper: #12161D;
-  --surface: #1A2029;
-  --ink: #E8EDF4;
+  --paper: #0F172A;
+  --surface: #172033;
+  --ink: #F8FAFC;
   --ink-contrast: #12161D;
-  --sub: #8B96A5;
-  --hint: #5F6B7A;
-  --line: #2A323E;
-  --line-soft: #232A35;
-  --accent: #6E9BF2;
-  --accent-soft: #1A2A45;
+  --sub: #94A3B8;
+  --hint: #64748B;
+  --line: #334155;
+  --line-soft: #273449;
+  --accent: #60A5FA;
+  --accent-soft: #172554;
   --accent-ink: #0D1A33;
   --ok: #5DCAA5;
   --ok-bg: #0F2E22;
@@ -86,7 +94,7 @@
   --color-danger-bg: var(--danger-bg);
   --color-danger-text: var(--danger-text);
   --color-row-alt: var(--row-alt);
-  --font-sans: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', Consolas, Menlo, 'Courier New', monospace;
 }
 
@@ -100,6 +108,12 @@
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font-family: var(--font-sans);
   }
 }
 
@@ -331,6 +345,134 @@
   }
   .icon-btn:hover { color: var(--ink); border-color: var(--hint); }
 
+  /* DeviceRent desktop shell: QA WORKSPACE와 동일한 250px 사이드바 규격 */
+  .device-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 45;
+    width: 250px;
+    padding: 22px 14px;
+    overflow-y: auto;
+    background: #1E293B;
+    color: #FFFFFF;
+  }
+  .device-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 0 12px 18px;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .device-sidebar-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #2563EB;
+  }
+  .device-sidebar-section { margin-top: 18px; }
+  .device-sidebar-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 25px;
+    padding: 0 10px 8px;
+    color: #94A3B8;
+    font-size: 12px;
+  }
+  .device-sidebar-nav { display: grid; gap: 3px; }
+  .device-sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    width: 222px;
+    height: 43px;
+    gap: 11px;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 8px;
+    color: #CBD5E1;
+    font-size: 13.5px;
+  }
+  .device-sidebar-nav .nav-link:hover,
+  .device-sidebar-nav .nav-link-active {
+    background: #2563EB;
+    color: #FFFFFF;
+  }
+  .device-sidebar-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 23px;
+    width: 23px;
+    height: 23px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 10px;
+  }
+  .device-sidebar-nav .nav-link-active .device-sidebar-nav-icon {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .device-topbar {
+    position: fixed;
+    inset: 0 0 auto 250px;
+    z-index: 44;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 22px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--surface);
+  }
+  .device-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--sub);
+    font-size: 13px;
+  }
+  .device-breadcrumb a { color: var(--accent); text-decoration: none; }
+  .device-breadcrumb strong { color: var(--ink); font-weight: 600; }
+  .device-topbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .device-home-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .device-home-button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .device-topbar-user { color: var(--sub); font-size: 13px; }
+  .device-topbar-user strong { color: var(--ink); font-weight: 600; }
+  .device-app-content {
+    min-height: 100vh;
+    margin-left: 250px;
+    padding-top: 62px;
+    background: var(--paper);
+  }
+  .device-app-content .page-wrap { max-width: 1360px; }
+
   /* 페이지네이션 */
   .pg-btn {
     min-width: 28px;
@@ -503,6 +645,512 @@
     }
     .portal-system-card {
       min-height: 160px;
+    }
+  }
+
+  /* QAOS 포털 DEV 레이아웃 */
+  .portal-page {
+    min-height: 100vh;
+    background: #F1F5F9;
+    color: #1E293B;
+  }
+  .portal-appbar {
+    max-width: none;
+    height: 64px;
+    margin: 0;
+    padding: 0 22px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 20px;
+    border-bottom: 1px solid #E2E8F0;
+    background: #FFFFFF;
+  }
+  .portal-brand {
+    gap: 10px;
+    min-width: 214px;
+    color: #1E293B;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .portal-brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: #1E293B;
+    color: #FFFFFF;
+    font-size: 13px;
+    box-shadow: none;
+  }
+  .portal-appbar-title {
+    color: #64748B;
+    font-size: 13px;
+  }
+  .portal-actions {
+    margin-left: auto;
+  }
+  .portal-user-name {
+    color: #475569;
+  }
+  .portal-layout-button,
+  .portal-reset-button {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid #CBD5E1;
+    border-radius: 7px;
+    background: #FFFFFF;
+    color: #334155;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .portal-layout-button:hover,
+  .portal-reset-button:hover {
+    border-color: #2563EB;
+    color: #2563EB;
+  }
+  .portal-layout-button.is-active {
+    border-color: #2563EB;
+    background: #2563EB;
+    color: #FFFFFF;
+  }
+  .portal-icon-button {
+    border-color: #CBD5E1;
+    background: #FFFFFF;
+    color: #475569;
+  }
+  .portal-body {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    min-height: calc(100vh - 64px);
+  }
+  .portal-sidebar {
+    padding: 22px 14px;
+    background: #1E293B;
+    color: #FFFFFF;
+  }
+  .portal-sidebar-title {
+    padding: 0 12px 15px;
+    color: #94A3B8;
+    font-size: 12px;
+  }
+  .portal-nav-group {
+    margin-bottom: 15px;
+  }
+  .portal-nav-group-button {
+    width: 222px;
+    min-height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px 8px;
+    border: 0;
+    background: transparent;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .portal-nav-group-button span {
+    transition: transform 0.12s ease;
+  }
+  .portal-nav-group-button span.is-closed {
+    transform: rotate(-90deg);
+  }
+  .portal-nav-items {
+    display: grid;
+    gap: 3px;
+  }
+  .portal-nav-item {
+    width: 222px;
+    height: 43px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #CBD5E1;
+    font-size: 13.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .portal-nav-item:hover {
+    background: #2563EB;
+    color: #FFFFFF;
+  }
+  .portal-nav-item small {
+    margin-left: auto;
+    color: #94A3B8;
+    font-size: 10px;
+  }
+  .portal-nav-item:hover small {
+    color: #DBEAFE;
+  }
+  .portal-nav-icon {
+    width: 23px;
+    height: 23px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .portal-content {
+    width: 100%;
+    max-width: 1260px;
+    margin: 0 auto;
+    padding: 28px 30px 64px;
+  }
+  .portal-title-area {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .portal-title-area h1 {
+    margin: 0;
+    color: #1E293B;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.7px;
+  }
+  .portal-title-area p {
+    margin: 6px 0 0;
+    color: #64748B;
+    font-size: 13px;
+  }
+  .portal-edit-guide {
+    padding: 10px 13px;
+    margin-bottom: 14px;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    background: #EFF6FF;
+    color: #1D4ED8;
+    font-size: 12px;
+  }
+  .portal-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .portal-widget {
+    min-height: 182px;
+    padding: 18px;
+    border: 1px solid #E2E8F0;
+    border-radius: 11px;
+    background: #FFFFFF;
+    box-shadow: 0 4px 14px rgba(30, 41, 59, 0.04);
+  }
+  .portal-widget.is-editing {
+    border-style: dashed;
+    border-color: #2563EB;
+    cursor: grab;
+  }
+  .portal-widget-wide {
+    grid-column: 1 / -1;
+  }
+  .portal-widget-head {
+    min-height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+  .portal-widget-head h2 {
+    margin: 2px 0 0;
+    color: #1E293B;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .portal-widget-eyebrow {
+    color: #2563EB;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+  }
+  .portal-widget-controls {
+    display: flex;
+    gap: 5px;
+  }
+  .portal-widget-controls button,
+  .portal-hidden-widgets button {
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: #475569;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .portal-widget-controls button:hover,
+  .portal-hidden-widgets button:hover {
+    border-color: #2563EB;
+    color: #2563EB;
+  }
+  .portal-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .portal-metric-grid button {
+    min-height: 90px;
+    padding: 13px;
+    border: 0;
+    border-radius: 9px;
+    background: #F1F5F9;
+    color: #1E293B;
+    text-align: left;
+    cursor: pointer;
+  }
+  .portal-metric-grid button:hover {
+    background: #E2E8F0;
+  }
+  .portal-metric-grid span {
+    display: block;
+    color: #64748B;
+    font-size: 11px;
+  }
+  .portal-metric-grid strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 23px;
+  }
+  .portal-metric-grid .portal-value-teal {
+    color: #0F766E;
+  }
+  .portal-calendar-placeholder {
+    min-height: 105px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    border-radius: 9px;
+    background: #F8FAFC;
+    color: #475569;
+  }
+  .portal-calendar-placeholder p {
+    margin: 4px 0 0;
+    color: #94A3B8;
+    font-size: 11px;
+  }
+  .portal-calendar-day {
+    width: 48px;
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #CCFBF1;
+    color: #0F766E;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .portal-device-list {
+    display: grid;
+  }
+  .portal-device-list button {
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 2px;
+    border: 0;
+    border-bottom: 1px solid #E2E8F0;
+    background: transparent;
+    color: #1E293B;
+    text-align: left;
+    cursor: pointer;
+  }
+  .portal-device-list button:last-child {
+    border-bottom: 0;
+  }
+  .portal-device-list button:hover strong {
+    color: #2563EB;
+  }
+  .portal-device-list strong,
+  .portal-device-list small {
+    display: block;
+  }
+  .portal-device-list small,
+  .portal-device-list code {
+    margin-top: 3px;
+    color: #64748B;
+    font-size: 10px;
+  }
+  .portal-widget-empty {
+    min-height: 108px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94A3B8;
+    font-size: 12px;
+    text-align: center;
+  }
+  .portal-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .portal-quick-actions button {
+    min-height: 98px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #CBD5E1;
+    border-radius: 9px;
+    background: #FFFFFF;
+    color: #334155;
+    cursor: pointer;
+  }
+  .portal-quick-actions button:hover {
+    border-color: #2563EB;
+    color: #2563EB;
+  }
+  .portal-quick-actions span {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #EFF6FF;
+    color: #2563EB;
+    font-weight: 700;
+  }
+  .portal-hidden-widgets {
+    padding: 13px;
+    margin-top: 14px;
+    border: 1px dashed #94A3B8;
+    border-radius: 9px;
+    color: #475569;
+    font-size: 12px;
+  }
+  .portal-hidden-widgets > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 9px;
+  }
+
+  .dark .portal-page {
+    background: #0F172A;
+    color: #E2E8F0;
+  }
+  .dark .portal-appbar,
+  .dark .portal-widget {
+    border-color: #334155;
+    background: #172033;
+  }
+  .dark .portal-brand,
+  .dark .portal-title-area h1,
+  .dark .portal-widget-head h2,
+  .dark .portal-device-list button {
+    color: #F8FAFC;
+  }
+  .dark .portal-appbar-title,
+  .dark .portal-user-name,
+  .dark .portal-title-area p,
+  .dark .portal-device-list small,
+  .dark .portal-device-list code {
+    color: #94A3B8;
+  }
+  .dark .portal-layout-button,
+  .dark .portal-reset-button,
+  .dark .portal-icon-button,
+  .dark .portal-widget-controls button,
+  .dark .portal-hidden-widgets button,
+  .dark .portal-quick-actions button {
+    border-color: #475569;
+    background: #172033;
+    color: #CBD5E1;
+  }
+  .dark .portal-layout-button.is-active {
+    border-color: #2563EB;
+    background: #2563EB;
+    color: #FFFFFF;
+  }
+  .dark .portal-metric-grid button,
+  .dark .portal-calendar-placeholder {
+    background: #1E293B;
+    color: #E2E8F0;
+  }
+  .dark .portal-metric-grid button:hover {
+    background: #273449;
+  }
+  .dark .portal-device-list button {
+    border-color: #334155;
+  }
+  .dark .portal-edit-guide {
+    border-color: #1D4ED8;
+    background: #172554;
+    color: #BFDBFE;
+  }
+
+  @media (max-width: 720px) {
+    .portal-appbar {
+      height: auto;
+      min-height: 62px;
+      padding: 12px;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+    }
+    .portal-brand {
+      min-width: 0;
+    }
+    .portal-appbar-title,
+    .portal-user-name {
+      display: none;
+    }
+    .portal-body {
+      grid-template-columns: 1fr;
+    }
+    .portal-sidebar {
+      display: flex;
+      gap: 6px;
+      padding: 9px;
+      overflow-x: auto;
+    }
+    .portal-sidebar-title,
+    .portal-nav-group-button {
+      display: none;
+    }
+    .portal-nav-group {
+      margin: 0;
+    }
+    .portal-nav-items {
+      display: flex;
+      gap: 6px;
+    }
+    .portal-nav-item {
+      width: auto;
+      min-width: max-content;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .portal-content {
+      padding: 20px 12px 48px;
+    }
+    .portal-widget-grid {
+      grid-template-columns: 1fr;
+    }
+    .portal-widget-wide {
+      grid-column: auto;
+    }
+    .portal-metric-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .portal-title-area {
+      align-items: flex-start;
     }
   }
 }
